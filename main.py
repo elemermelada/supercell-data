@@ -1,5 +1,5 @@
-from .request import request
-from .retrieve import retrieve
+from request import request
+from retrieve import retrieve
 
 request()
 retrieve()

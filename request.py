@@ -1,31 +1,23 @@
 import os
 import requests
 import jwt
+import browser_cookie3
 from jwt import ExpiredSignatureError, InvalidTokenError
 from datetime import datetime, timezone, timedelta
 
 BEGIN_URL = "https://support.supercell.com/api/gdpr/begin"
 SUBMIT_URL = "https://support.supercell.com/api/gdpr/submit"
 
+
 # ---------------------------------------------------------
-# PLACEHOLDER: You implement this function however you want
+# JWT decode + expiration check
 # ---------------------------------------------------------
 def on_token_expiring_soon(decoded_jwt, expires_at):
-    """
-    This function is called when the JWT expires in < 3 days.
-    Implement your own logic here.
-    """
     print("[ALERT] JWT expires in less than 3 days")
     print(f"[ALERT] Expiration time: {expires_at}")
-    # Your custom logic goes here
-    pass
 
 
 def decode_jwt_and_check_expiry(token: str):
-    """
-    Decodes a JWT without verifying the signature.
-    Checks if expiration is within 3 days.
-    """
     try:
         decoded = jwt.decode(token, options={"verify_signature": False})
         exp = decoded.get("exp")
@@ -54,10 +46,33 @@ def decode_jwt_and_check_expiry(token: str):
     return None
 
 
+# ---------------------------------------------------------
+# Load cookies from Chrome
+# ---------------------------------------------------------
+def load_browser_cookies(session):
+    """
+    Loads cookies from Chrome for *.supercell.com.
+    This gives us the exact cookies the browser uses.
+    """
+    print("[INFO] Loading cookies from Chrome...")
+
+    try:
+        chrome_cookies = browser_cookie3.chrome(domain_name="supercell.com")
+    except Exception as e:
+        raise RuntimeError(f"Failed to load browser cookies: {e}")
+
+    count = 0
+    for c in chrome_cookies:
+        session.cookies.set(c.name, c.value, domain=c.domain, path=c.path)
+        count += 1
+
+    print(f"[INFO] Loaded {count} cookies from Chrome")
+
+
+# ---------------------------------------------------------
+# Fetch CSRF cookie
+# ---------------------------------------------------------
 def fetch_csrf(session: requests.Session, game: str, action: str):
-    """
-    Calls the /begin endpoint to obtain the csrf_ cookie.
-    """
     params = {"game": game, "action": action}
     print("[INFO] Fetching CSRF token...")
 
@@ -72,15 +87,20 @@ def fetch_csrf(session: requests.Session, game: str, action: str):
     return csrf_cookie
 
 
+# ---------------------------------------------------------
+# Submit GDPR request
+# ---------------------------------------------------------
 def submit_request(session: requests.Session, csrf_token: str, game: str, action: str):
-    """
-    Sends the GDPR request using the CSRF token.
-    """
     headers = {
         "Content-Type": "application/json",
         "X-CSRF-Token": csrf_token,
         "Origin": "https://support.supercell.com",
-        "Referer": "https://support.supercell.com/hay-day/en/articles/gdpr.html",
+        "Referer": f"https://support.supercell.com/{game}/en/articles/gdpr.html",
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/146.0.0.0 Safari/537.36"
+        ),
     }
 
     payload = {"game": game, "action": action}
@@ -93,22 +113,35 @@ def submit_request(session: requests.Session, csrf_token: str, game: str, action
     return r
 
 
+# ---------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------
 def request():
-    # Read token from environment variable
+    # Load JWT from environment
     user_jwt = os.getenv("SUPERCELL_ACCOUNT_INFO_TOKEN")
-
     if not user_jwt:
-        raise EnvironmentError(
-            "Environment variable SUPERCELL_ACCOUNT_INFO_TOKEN is not set."
-        )
+        raise EnvironmentError("SUPERCELL_ACCOUNT_INFO_TOKEN not set in .env")
 
     print("\n=== Decoding JWT ===")
     decode_jwt_and_check_expiry(user_jwt)
 
     session = requests.Session()
-    session.cookies.set("account-user-info-token", user_jwt, domain="support.supercell.com")
 
+    # Step 1: Load cookies from Chrome
+    load_browser_cookies(session)
+
+    # Step 2: Ensure JWT cookie is present
+    session.cookies.set(
+        "account-user-info-token",
+        user_jwt,
+        domain="support.supercell.com",
+        path="/"
+    )
+
+    # Step 3: Fetch CSRF
     csrf_token = fetch_csrf(session, game="hay-day", action="request")
+
+    # Step 4: Submit GDPR request
     submit_request(session, csrf_token, game="hay-day", action="request")
 
 
