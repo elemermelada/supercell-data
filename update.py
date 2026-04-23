@@ -4,7 +4,9 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 from dateutil import parser
+from logger import get_logger
 
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------
 # Single source of truth: fixed column order
@@ -41,24 +43,7 @@ COLUMN_ORDER = [
     "gamecenter",
 ]
 
-
-# ---------------------------------------------------------
-# Google Sheets setup (env vars)
-# ---------------------------------------------------------
-SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
-SHEET_NAME = os.getenv("SHEET_NAME")
-
-if not SPREADSHEET_ID or not SHEET_NAME:
-    raise EnvironmentError("Missing SPREADSHEET_ID or SHEET_NAME environment variables")
-
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-CREDS = Credentials.from_service_account_file(
-    "service_account.json",
-    scopes=SCOPES
-)
-
-gc = gspread.authorize(CREDS)
-sheet = gc.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
 
 
 # ---------------------------------------------------------
@@ -72,7 +57,7 @@ def normalize_date(dt_str):
         dt = parser.parse(dt_str)
         return dt.strftime("%Y-%m-%d %H:%M:%S")
     except Exception as e:
-        print(f"[WARN] Could not parse date '{dt_str}': {e}")
+        logger.warning(f"Could not parse date '{dt_str}': {e}")
         return dt_str
 
 
@@ -116,28 +101,27 @@ def flatten(data, uuid):
 # ---------------------------------------------------------
 # Ensure header row exists and is up to date
 # ---------------------------------------------------------
-def ensure_header_row(required_fields):
+def ensure_header_row(sheet, required_fields):
     header = COLUMN_ORDER.copy()
 
-    # Add any new fields not in COLUMN_ORDER
     for field in required_fields:
         if field not in header:
             header.append(field)
 
     try:
         existing_header = sheet.row_values(1)
-    except:
+    except Exception as e:
+        logger.warning(f"Could not read header row: {e}")
         existing_header = []
 
     if not existing_header:
         sheet.insert_row(header, 1)
-        print("[INFO] Created header row")
+        logger.info("Created header row")
         return header
 
-    # Rewrite header if changed or out of order
     if existing_header != header:
         sheet.update("1:1", [header])
-        print("[INFO] Updated header row to canonical order")
+        logger.info("Updated header row to canonical order")
 
     return header
 
@@ -145,7 +129,7 @@ def ensure_header_row(required_fields):
 # ---------------------------------------------------------
 # Optional: format the date column nicely
 # ---------------------------------------------------------
-def format_date_column(header):
+def format_date_column(sheet, header):
     if "email_date" not in header:
         return
 
@@ -162,19 +146,29 @@ def format_date_column(header):
                 }
             }
         )
-        print("[INFO] Applied date formatting to email_date column")
+        logger.info("Applied date formatting to email_date column")
     except Exception as e:
-        print(f"[WARN] Could not format date column: {e}")
+        logger.warning(f"Could not format date column: {e}")
 
 
 # ---------------------------------------------------------
 # Insert missing rows
 # ---------------------------------------------------------
 def update(directory="downloads"):
+    spreadsheet_id = os.getenv("SPREADSHEET_ID")
+    sheet_name = os.getenv("SHEET_NAME")
+
+    if not spreadsheet_id or not sheet_name:
+        raise EnvironmentError("Missing SPREADSHEET_ID or SHEET_NAME environment variables")
+
+    creds = Credentials.from_service_account_file("service_account.json", scopes=SCOPES)
+    gc = gspread.authorize(creds)
+    sheet = gc.open_by_key(spreadsheet_id).worksheet(sheet_name)
+
     json_files = [f for f in os.listdir(directory) if f.endswith(".json")]
 
     if not json_files:
-        print("[INFO] No JSON files found.")
+        logger.info("No JSON files found.")
         return
 
     all_fields = set()
@@ -188,24 +182,26 @@ def update(directory="downloads"):
         json_data[uuid] = flat
         all_fields.update(flat.keys())
 
-    header = ensure_header_row(list(all_fields))
+    header = ensure_header_row(sheet, list(all_fields))
 
     existing_uuids = sheet.col_values(header.index("uuid") + 1)
 
     for uuid, flat in json_data.items():
         if uuid in existing_uuids:
-            print(f"[INFO] UUID {uuid} already exists, skipping.")
+            logger.info(f"UUID {uuid} already exists, skipping.")
             continue
 
         row = [flat.get(col, "") for col in header]
         sheet.append_row(row)
-        print(f"[INFO] Added row for {uuid}")
+        logger.info(f"Added row for {uuid}")
 
-    format_date_column(header)
+    format_date_column(sheet, header)
 
 
 # ---------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------
 if __name__ == "__main__":
+    from logger import setup_console_logging
+    setup_console_logging()
     update()

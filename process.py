@@ -2,6 +2,9 @@ import os
 import json
 import re
 from bs4 import BeautifulSoup
+from logger import get_logger
+
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------
@@ -27,7 +30,7 @@ def extract_hay_day_data(html_path):
     # ---------------------------------------------------------
     hayday_header = soup.find("h2", string="Hay Day")
     if not hayday_header:
-        print(f"[WARN] Hay Day section not found in {html_path}")
+        logger.warning(f"Hay Day section not found in {html_path}")
         return None
 
     # Collect <p> tags until next <h2>
@@ -132,7 +135,7 @@ def extract_hay_day_data(html_path):
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
 
-    print(f"[INFO] Saved Hay Day JSON to {json_path}")
+    logger.info(f"Saved Hay Day JSON to {json_path}")
     return data
 
 
@@ -140,19 +143,15 @@ def extract_hay_day_data(html_path):
 # Process all HTML files missing JSON
 # ---------------------------------------------------------
 def process(directory="downloads"):
-    """
-    Scans the directory for .html files that do NOT have a matching .json.
-    Extracts Hay Day data for each.
-    """
     if not os.path.isdir(directory):
-        print(f"[WARN] Directory '{directory}' does not exist.")
+        logger.warning(f"Directory '{directory}' does not exist.")
         return
 
     files = os.listdir(directory)
     html_files = [f for f in files if f.endswith(".html")]
 
     if not html_files:
-        print("[INFO] No HTML files found.")
+        logger.info("No HTML files found.")
         return
 
     for filename in html_files:
@@ -160,10 +159,10 @@ def process(directory="downloads"):
         json_path = html_path.replace(".html", ".json")
 
         if os.path.exists(json_path):
-            print(f"[INFO] JSON already exists for {filename}, skipping.")
+            logger.info(f"JSON already exists for {filename}, skipping.")
             continue
 
-        print(f"[INFO] Processing {filename}...")
+        logger.info(f"Processing {filename}...")
         extract_hay_day_data(html_path)
 
 
@@ -171,4 +170,6 @@ def process(directory="downloads"):
 # Main entry point
 # ---------------------------------------------------------
 if __name__ == "__main__":
+    from logger import setup_console_logging
+    setup_console_logging()
     process()

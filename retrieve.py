@@ -6,6 +6,9 @@ import requests
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
 from datetime import datetime
+from logger import get_logger
+
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------
 # Environment variables
@@ -31,10 +34,10 @@ def connect_imap():
     if not all([IMAP_SERVER, EMAIL_USER, EMAIL_PASS]):
         raise EnvironmentError("Missing IMAP environment variables")
 
-    print("[INFO] Connecting to IMAP server...")
+    logger.info("Connecting to IMAP server...")
     mail = imaplib.IMAP4_SSL(IMAP_SERVER)
     mail.login(EMAIL_USER, EMAIL_PASS)
-    print("[INFO] Logged in successfully")
+    logger.info("Logged in successfully")
 
     return mail
 
@@ -45,7 +48,7 @@ def connect_imap():
 def search_emails(mail, sender: str, since_date: str):
     imap_date = convert_date(since_date)
 
-    print(f"[INFO] Searching for emails FROM '{sender}' SINCE {imap_date}")
+    logger.info(f"Searching for emails FROM '{sender}' SINCE {imap_date}")
 
     mail.select("INBOX")
     status, data = mail.search(
@@ -57,7 +60,7 @@ def search_emails(mail, sender: str, since_date: str):
         raise RuntimeError("IMAP search failed")
 
     email_ids = data[0].split()
-    print(f"[INFO] Found {len(email_ids)} matching emails")
+    logger.info(f"Found {len(email_ids)} matching emails")
 
     return email_ids
 
@@ -97,31 +100,29 @@ def append_email_date_to_html(html_path, email_date):
     try:
         with open(html_path, "a", encoding="utf-8") as f:
             f.write(f"\n<!-- EMAIL_DATE: {email_date.isoformat()} -->\n")
-        print(f"[INFO] Appended email date to {html_path}")
+        logger.info(f"Appended email date to {html_path}")
     except Exception as e:
-        print(f"[WARN] Failed to append email date: {e}")
+        logger.warning(f"Failed to append email date: {e}")
 
 
 # ---------------------------------------------------------
 # Download the linked file
 # ---------------------------------------------------------
 def download_file(url: str):
-    print(f"[INFO] Downloading data from: {url}")
+    logger.info(f"Downloading data from: {url}")
 
     try:
         r = requests.get(url)
     except Exception as e:
-        print(f"[WARN] Request failed: {e}")
+        logger.warning(f"Request failed: {e}")
         return None
 
-    # Ignore expired links
     if r.status_code == 403:
-        print("[WARN] Link expired (HTTP 403). Skipping.")
+        logger.warning("Link expired (HTTP 403). Skipping.")
         return None
 
-    # Handle other errors normally
     if r.status_code != 200:
-        print(f"[WARN] Unexpected status code {r.status_code}. Skipping.")
+        logger.warning(f"Unexpected status code {r.status_code}. Skipping.")
         return None
 
     os.makedirs("downloads", exist_ok=True)
@@ -132,7 +133,7 @@ def download_file(url: str):
     with open(filepath, "wb") as f:
         f.write(r.content)
 
-    print(f"[INFO] Saved file to: {filepath}")
+    logger.info(f"Saved file to: {filepath}")
     return filepath
 
 
@@ -142,41 +143,32 @@ def download_file(url: str):
 def process_email(mail, email_id):
     status, msg_data = mail.fetch(email_id, "(RFC822)")
     if status != "OK":
-        print(f"[WARN] Failed to fetch email ID {email_id}")
+        logger.warning(f"Failed to fetch email ID {email_id}")
         return
 
     raw_email = msg_data[0][1]
     msg = email.message_from_bytes(raw_email)
 
-    # Parse email date
     email_date_raw = msg.get("Date")
     email_date = parsedate_to_datetime(email_date_raw)
 
-    # Decode subject
     subject, enc = decode_header(msg["Subject"])[0]
     if isinstance(subject, bytes):
         subject = subject.decode(enc or "utf-8", errors="ignore")
 
-    print("\n--- EMAIL ---")
-    print("From:", msg.get("From"))
-    print("Subject:", subject)
-    print("Date:", email_date_raw)
+    logger.debug(f"From: {msg.get('From')} | Subject: {subject} | Date: {email_date_raw}")
 
     body = extract_plaintext(msg)
-    print("Body:\n", body)
 
-    # Extract link
     url = extract_download_link(body)
     if not url:
-        print("[WARN] No download link found in email")
+        logger.warning("No download link found in email")
         return
 
-    # Download file
     html_path = download_file(url)
     if not html_path:
         return
 
-    # Append email date to the HTML file
     append_email_date_to_html(html_path, email_date)
 
 
@@ -187,7 +179,6 @@ def retrieve():
     if not SENDER_FILTER:
         raise EnvironmentError("SENDER_FILTER missing")
 
-    # Hardcoded date
     since_date = "2024-01-01"
 
     mail = connect_imap()
@@ -203,8 +194,10 @@ def retrieve():
 
     mail.close()
     mail.logout()
-    print("\n[INFO] Done.")
+    logger.info("Done.")
 
 
 if __name__ == "__main__":
+    from logger import setup_console_logging
+    setup_console_logging()
     retrieve()
