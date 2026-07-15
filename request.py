@@ -1,9 +1,8 @@
 import os
 import requests
-import jwt
 import browser_cookie3
-from jwt import ExpiredSignatureError, InvalidTokenError
-from datetime import datetime, timezone, timedelta
+from http.cookiejar import CookieJar
+from typing import Callable
 from logger import get_logger
 
 logger = get_logger(__name__)
@@ -13,59 +12,37 @@ SUBMIT_URL = "https://support.supercell.com/api/gdpr/submit"
 
 
 # ---------------------------------------------------------
-# JWT decode + expiration check
+# Fetch cookies from the specified browser
 # ---------------------------------------------------------
-def on_token_expiring_soon(decoded_jwt, expires_at):
-    logger.warning("JWT expires in less than 3 days")
-    logger.warning(f"Expiration time: {expires_at}")
+def browser_cookie_fetcher() -> Callable[..., CookieJar]:
+    browser_type = os.getenv("BROWSER_TYPE", "firefox").lower()
+    logger.info(f"Using browser type: {browser_type}")
 
-
-def decode_jwt_and_check_expiry(token: str):
-    try:
-        decoded = jwt.decode(token, options={"verify_signature": False})
-        exp = decoded.get("exp")
-
-        if not exp:
-            logger.warning("JWT has no exp claim")
-            return decoded
-
-        expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
-        now = datetime.now(timezone.utc)
-        remaining = expires_at - now
-
-        logger.info(f"JWT expires at: {expires_at}")
-        logger.info(f"JWT time remaining: {remaining}")
-
-        if remaining < timedelta(days=3):
-            on_token_expiring_soon(decoded, expires_at)
-
-        return decoded
-
-    except ExpiredSignatureError:
-        logger.warning("JWT token is expired")
-    except InvalidTokenError:
-        logger.warning("JWT token is invalid")
-
-    return None
+    if browser_type == "firefox":
+        return browser_cookie3.firefox
+    elif browser_type == "chrome":
+        return browser_cookie3.chrome
+    else:
+        raise ValueError(f"Unsupported browser type: {browser_type}")
 
 
 # ---------------------------------------------------------
-# Load cookies from Chrome
+# Load cookies from Browser
 # ---------------------------------------------------------
 def load_browser_cookies(session):
-    logger.info("Loading cookies from Chrome...")
+    logger.info("Loading cookies from Browser...")
 
     try:
-        chrome_cookies = browser_cookie3.chrome(domain_name="supercell.com")
+        cookies = browser_cookie_fetcher()(domain_name="supercell.com")
     except Exception as e:
         raise RuntimeError(f"Failed to load browser cookies: {e}")
 
     count = 0
-    for c in chrome_cookies:
+    for c in cookies:
         session.cookies.set(c.name, c.value, domain=c.domain, path=c.path)
         count += 1
 
-    logger.info(f"Loaded {count} cookies from Chrome")
+    logger.info(f"Loaded {count} cookies from Browser")
 
 
 # ---------------------------------------------------------
@@ -116,23 +93,9 @@ def submit_request(session: requests.Session, csrf_token: str, game: str, action
 # Main entry point
 # ---------------------------------------------------------
 def request():
-    user_jwt = os.getenv("SUPERCELL_ACCOUNT_INFO_TOKEN")
-    if not user_jwt:
-        raise EnvironmentError("SUPERCELL_ACCOUNT_INFO_TOKEN not set in .env")
-
-    logger.info("Decoding JWT...")
-    decode_jwt_and_check_expiry(user_jwt)
-
     session = requests.Session()
 
     load_browser_cookies(session)
-
-    session.cookies.set(
-        "account-user-info-token",
-        user_jwt,
-        domain="support.supercell.com",
-        path="/"
-    )
 
     csrf_token = fetch_csrf(session, game="hay-day", action="request")
     submit_request(session, csrf_token, game="hay-day", action="request")
@@ -140,5 +103,6 @@ def request():
 
 if __name__ == "__main__":
     from logger import setup_console_logging
+
     setup_console_logging()
     request()
