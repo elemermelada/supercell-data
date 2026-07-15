@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import gspread
 from google.oauth2.service_account import Credentials
@@ -44,6 +45,21 @@ COLUMN_ORDER = [
 ]
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+
+
+# Canonical "YYYY-MM-DD HH:MM:SS" shape produced by normalize_date()
+_CANONICAL_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
+
+
+# ---------------------------------------------------------
+# Sort key: canonical dates sort chronologically first,
+# unparseable/empty dates go last (deterministically).
+# ---------------------------------------------------------
+def _sort_key(flat):
+    value = flat.get("email_date") or ""
+    if _CANONICAL_DATE_RE.match(value):
+        return (0, value)
+    return (1, value)
 
 
 # ---------------------------------------------------------
@@ -92,7 +108,9 @@ def flatten(data, uuid):
         "valley_sanctuary_animals": data.get("valley", {}).get("sanctuary_animals"),
         "valley_sun_points": data.get("valley", {}).get("sun_points"),
         "valley_vouchers_blue": data.get("valley", {}).get("vouchers", {}).get("blue"),
-        "valley_vouchers_green": data.get("valley", {}).get("vouchers", {}).get("green"),
+        "valley_vouchers_green": data.get("valley", {})
+        .get("vouchers", {})
+        .get("green"),
         "valley_vouchers_red": data.get("valley", {}).get("vouchers", {}).get("red"),
         "gamecenter": data.get("gamecenter"),
     }
@@ -134,17 +152,12 @@ def format_date_column(sheet, header):
         return
 
     col = header.index("email_date") + 1
-    col_letter = chr(ord('A') + col - 1)
+    col_letter = chr(ord("A") + col - 1)
 
     try:
         sheet.format(
             f"{col_letter}2:{col_letter}",
-            {
-                "numberFormat": {
-                    "type": "DATE_TIME",
-                    "pattern": "yyyy-mm-dd hh:mm:ss"
-                }
-            }
+            {"numberFormat": {"type": "DATE_TIME", "pattern": "yyyy-mm-dd hh:mm:ss"}},
         )
         logger.info("Applied date formatting to email_date column")
     except Exception as e:
@@ -159,7 +172,9 @@ def update(directory="downloads"):
     sheet_name = os.getenv("SHEET_NAME")
 
     if not spreadsheet_id or not sheet_name:
-        raise EnvironmentError("Missing SPREADSHEET_ID or SHEET_NAME environment variables")
+        raise EnvironmentError(
+            "Missing SPREADSHEET_ID or SHEET_NAME environment variables"
+        )
 
     creds = Credentials.from_service_account_file("service_account.json", scopes=SCOPES)
     gc = gspread.authorize(creds)
@@ -172,28 +187,38 @@ def update(directory="downloads"):
         return
 
     all_fields = set()
-    json_data = {}
+    rows = []
 
     for file in json_files:
         uuid = file.replace(".json", "")
         with open(os.path.join(directory, file), "r", encoding="utf-8") as f:
             data = json.load(f)
         flat = flatten(data, uuid)
-        json_data[uuid] = flat
+        rows.append(flat)
         all_fields.update(flat.keys())
+
+    rows.sort(key=_sort_key)
 
     header = ensure_header_row(sheet, list(all_fields))
 
-    existing_uuids = sheet.col_values(header.index("uuid") + 1)
+    existing_uuids = set(sheet.col_values(header.index("uuid") + 1))
 
-    for uuid, flat in json_data.items():
+    new_rows = []
+    for flat in rows:
+        uuid = flat.get("uuid")
         if uuid in existing_uuids:
             logger.info(f"UUID {uuid} already exists, skipping.")
             continue
 
-        row = [flat.get(col, "") for col in header]
-        sheet.append_row(row)
-        logger.info(f"Added row for {uuid}")
+        new_rows.append([flat.get(col, "") for col in header])
+        existing_uuids.add(uuid)
+        logger.info(f"Queued row for {uuid}")
+
+    if new_rows:
+        sheet.append_rows(new_rows, value_input_option="USER_ENTERED")
+        logger.info(f"Added {len(new_rows)} new rows")
+    else:
+        logger.info("No new rows to add")
 
     format_date_column(sheet, header)
 
@@ -203,5 +228,6 @@ def update(directory="downloads"):
 # ---------------------------------------------------------
 if __name__ == "__main__":
     from logger import setup_console_logging
+
     setup_console_logging()
     update()
