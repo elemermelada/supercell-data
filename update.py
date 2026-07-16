@@ -4,9 +4,12 @@ import re
 
 import gspread
 from dateutil import parser
+from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
 
 from logger import get_logger
+
+load_dotenv()
 
 logger = get_logger(__name__)
 

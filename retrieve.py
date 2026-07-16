@@ -8,8 +8,11 @@ from email.header import decode_header
 from email.utils import parsedate_to_datetime
 
 import requests
+from dotenv import load_dotenv
 
 from logger import get_logger
+
+load_dotenv()
 
 logger = get_logger(__name__)
 
