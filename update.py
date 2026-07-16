@@ -1,10 +1,11 @@
+import json
 import os
 import re
-import json
+
 import gspread
-from google.oauth2.service_account import Credentials
-from datetime import datetime
 from dateutil import parser
+from google.oauth2.service_account import Credentials
+
 from logger import get_logger
 
 logger = get_logger(__name__)
@@ -172,7 +173,7 @@ def update(directory="downloads"):
     sheet_name = os.getenv("SHEET_NAME")
 
     if not spreadsheet_id or not sheet_name:
-        raise EnvironmentError(
+        raise OSError(
             "Missing SPREADSHEET_ID or SHEET_NAME environment variables"
         )
 
@@ -191,7 +192,7 @@ def update(directory="downloads"):
 
     for file in json_files:
         uuid = file.replace(".json", "")
-        with open(os.path.join(directory, file), "r", encoding="utf-8") as f:
+        with open(os.path.join(directory, file), encoding="utf-8") as f:
             data = json.load(f)
         flat = flatten(data, uuid)
         rows.append(flat)

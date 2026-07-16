@@ -1,7 +1,9 @@
-import os
 import json
+import os
 import re
+
 from bs4 import BeautifulSoup
+
 from logger import get_logger
 
 logger = get_logger(__name__)
@@ -11,7 +13,7 @@ logger = get_logger(__name__)
 # Extract Hay Day data from a single HTML file
 # ---------------------------------------------------------
 def extract_hay_day_data(html_path):
-    with open(html_path, "r", encoding="utf-8") as f:
+    with open(html_path, encoding="utf-8") as f:
         soup = BeautifulSoup(f.read(), "html.parser")
 
     data = {}
@@ -96,7 +98,8 @@ def extract_hay_day_data(html_path):
 
         # Coins + vouchers
         m = re.search(
-            r"Resources: (\d+) coins and vouchers: (\d+) Blue, (\d+) Green, (\d+) Purple and (\d+) Gold",
+            r"Resources: (\d+) coins and vouchers: "
+            r"(\d+) Blue, (\d+) Green, (\d+) Purple and (\d+) Gold",
             line,
         )
         if m:
@@ -110,7 +113,9 @@ def extract_hay_day_data(html_path):
 
         # Valley resources
         m = re.search(
-            r"Your Valley resources: (\d+) fuel, (\d+) chickens, (\d+) sanctuary animals, (\d+) sun points and vouchers: (\d+) Blue, (\d+) Green, (\d+) Red",
+            r"Your Valley resources: (\d+) fuel, (\d+) chickens, "
+            r"(\d+) sanctuary animals, (\d+) sun points and vouchers: "
+            r"(\d+) Blue, (\d+) Green, (\d+) Red",
             line,
         )
         if m:

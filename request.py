@@ -1,8 +1,10 @@
 import os
-import requests
-import browser_cookie3
+from collections.abc import Callable
 from http.cookiejar import CookieJar
-from typing import Callable
+
+import browser_cookie3
+import requests
+
 from logger import get_logger
 
 logger = get_logger(__name__)
@@ -35,7 +37,7 @@ def load_browser_cookies(session):
     try:
         cookies = browser_cookie_fetcher()(domain_name="supercell.com")
     except Exception as e:
-        raise RuntimeError(f"Failed to load browser cookies: {e}")
+        raise RuntimeError(f"Failed to load browser cookies: {e}") from e
 
     count = 0
     for c in cookies:

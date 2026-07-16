@@ -1,11 +1,13 @@
+import email
+import imaplib
 import os
 import re
-import imaplib
-import email
-import requests
+from datetime import datetime
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
-from datetime import datetime
+
+import requests
+
 from logger import get_logger
 
 logger = get_logger(__name__)
@@ -32,7 +34,7 @@ def convert_date(date_str: str) -> str:
 # ---------------------------------------------------------
 def connect_imap():
     if not all([IMAP_SERVER, EMAIL_USER, EMAIL_PASS]):
-        raise EnvironmentError("Missing IMAP environment variables")
+        raise OSError("Missing IMAP environment variables")
 
     logger.info("Connecting to IMAP server...")
     mail = imaplib.IMAP4_SSL(IMAP_SERVER)
@@ -176,7 +178,7 @@ def process_email(mail, email_id):
 # ---------------------------------------------------------
 def retrieve():
     if not SENDER_FILTER:
-        raise EnvironmentError("SENDER_FILTER missing")
+        raise OSError("SENDER_FILTER missing")
 
     since_date = "2024-01-01"
 
