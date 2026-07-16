@@ -2,7 +2,7 @@
 
 Script to automate GDPR data collection from Supercell accounts (Hay Day).
 
-*Mostly vibe-coded, but it does the job.*
+_Mostly vibe-coded, but it does the job._
 
 ## What it does
 
@@ -40,15 +40,15 @@ Copy `.env.example` to `.env` and fill in the values. Environment variables must
 export $(grep -v '^#' .env | xargs)
 ```
 
-| Variable | Required for | Description |
-|---|---|---|
-| `SUPERCELL_ACCOUNT_INFO_TOKEN` | request | JWT from your Supercell account session. Find it in Chrome DevTools → Application → Cookies → `support.supercell.com` → `account-user-info-token` |
-| `IMAP_SERVER` | retrieve | IMAP hostname (e.g. `imap.gmail.com`) |
-| `EMAIL_USER` | retrieve | Email address that receives the GDPR export |
-| `EMAIL_PASS` | retrieve | Email password or app password |
-| `SENDER_FILTER` | retrieve | Sender address to filter on (e.g. `no-reply@mydata.supercell.com`) |
-| `SPREADSHEET_ID` | update | Google Sheets ID from the sheet URL |
-| `SHEET_NAME` | update | Worksheet tab name (e.g. `HayDayData`) |
+| Variable                       | Required for | Description                                                                                                                                       |
+| ------------------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SUPERCELL_ACCOUNT_INFO_TOKEN` | request      | JWT from your Supercell account session. Find it in Chrome DevTools → Application → Cookies → `support.supercell.com` → `account-user-info-token` |
+| `IMAP_SERVER`                  | retrieve     | IMAP hostname (e.g. `imap.gmail.com`)                                                                                                             |
+| `EMAIL_USER`                   | retrieve     | Email address that receives the GDPR export                                                                                                       |
+| `EMAIL_PASS`                   | retrieve     | Email password or app password                                                                                                                    |
+| `SENDER_FILTER`                | retrieve     | Sender address to filter on (e.g. `no-reply@mydata.supercell.com`)                                                                                |
+| `SPREADSHEET_ID`               | update       | Google Sheets ID from the sheet URL                                                                                                               |
+| `SHEET_NAME`                   | update       | Worksheet tab name (e.g. `HayDayData`)                                                                                                            |
 
 Place `service_account.json` in the project root.
 
@@ -70,7 +70,7 @@ This submits the GDPR export request, waits for the email, downloads the HTML, a
 python update.py
 ```
 
-Reads all `.json` files from `downloads/` and appends new rows to the configured sheet. Already-uploaded UUIDs are skipped automatically. This step is intentionally separate from `main.py`.
+Reads all `.json` files from `downloads/` and appends new rows to the configured sheet. Already-uploaded UUIDs are skipped automatically.
 
 ### Run individual stages
 
