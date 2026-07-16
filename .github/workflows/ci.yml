@@ -21,6 +21,11 @@ jobs:
       - name: Install tooling
         run: pip install black mypy ruff
 
+      - name: Install runtime deps and type stubs (for mypy)
+        run: |
+          pip install -r requirements.txt
+          pip install types-requests types-python-dateutil
+
       - name: Check formatting (black)
         run: black --check --diff .
 

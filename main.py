@@ -44,6 +44,8 @@ def main() -> None:
     setup_logging(log_file)
 
     run_step(request)
+    # The export email arrives almost instantly after the request, so a short
+    # pause lets it land in the inbox before `retrieve` searches for it.
     sleep(5)
     run_step(retrieve)
     run_step(process)

@@ -6,6 +6,7 @@ import gspread
 from dateutil import parser
 from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
+from gspread.utils import rowcol_to_a1
 
 from logger import get_logger
 
@@ -121,6 +122,20 @@ def flatten(data, uuid):
 
 
 # ---------------------------------------------------------
+# Guard: flatten() output keys and COLUMN_ORDER must stay in sync. If a new
+# field is added to one but not the other, parsed data would silently never
+# reach the sheet. Fail loudly at import time instead.
+# ---------------------------------------------------------
+_flatten_keys = set(flatten({}, ""))
+if _flatten_keys != set(COLUMN_ORDER):
+    raise RuntimeError(
+        "flatten() keys and COLUMN_ORDER are out of sync — "
+        f"only in flatten(): {sorted(_flatten_keys - set(COLUMN_ORDER))}, "
+        f"only in COLUMN_ORDER: {sorted(set(COLUMN_ORDER) - _flatten_keys)}"
+    )
+
+
+# ---------------------------------------------------------
 # Ensure header row exists and is up to date
 # ---------------------------------------------------------
 def ensure_header_row(sheet, required_fields):
@@ -141,11 +156,21 @@ def ensure_header_row(sheet, required_fields):
         logger.info("Created header row")
         return header
 
-    if existing_header != header:
-        sheet.update("1:1", [header])
-        logger.info("Updated header row to canonical order")
+    # Never reorder existing columns: historical rows are stored positionally,
+    # so rewriting row 1 into a different order would silently shift all past
+    # data under the wrong headers. Only append columns that don't exist yet,
+    # at the end, and return the header that matches the sheet's real layout.
+    new_header = existing_header.copy()
+    for field in header:
+        if field not in new_header:
+            new_header.append(field)
 
-    return header
+    if new_header != existing_header:
+        added = [f for f in new_header if f not in existing_header]
+        sheet.update("1:1", [new_header])
+        logger.info(f"Appended new columns to header row: {added}")
+
+    return new_header
 
 
 # ---------------------------------------------------------
@@ -156,7 +181,9 @@ def format_date_column(sheet, header):
         return
 
     col = header.index("email_date") + 1
-    col_letter = chr(ord("A") + col - 1)
+    # Derive the column letter via gspread so it stays correct past column Z
+    # (e.g. column 27 -> "AA"), unlike chr(ord("A") + col - 1).
+    col_letter = re.sub(r"\d+$", "", rowcol_to_a1(1, col))
 
     try:
         sheet.format(
@@ -176,7 +203,13 @@ def update(directory="downloads"):
     sheet_name = os.getenv("SHEET_NAME")
 
     if not spreadsheet_id or not sheet_name:
-        raise OSError("Missing SPREADSHEET_ID or SHEET_NAME environment variables")
+        raise RuntimeError("Missing SPREADSHEET_ID or SHEET_NAME environment variables")
+
+    # Match process()'s behaviour: a missing downloads directory means there's
+    # simply nothing to upload, so warn and return instead of crashing.
+    if not os.path.isdir(directory):
+        logger.warning(f"Directory '{directory}' does not exist.")
+        return
 
     creds = Credentials.from_service_account_file("service_account.json", scopes=SCOPES)
     gc = gspread.authorize(creds)
@@ -191,7 +224,7 @@ def update(directory="downloads"):
     rows = []
 
     for file in json_files:
-        uuid = file.replace(".json", "")
+        uuid = os.path.splitext(file)[0]
         with open(os.path.join(directory, file), encoding="utf-8") as f:
             data = json.load(f)
         flat = flatten(data, uuid)

@@ -76,7 +76,7 @@ python main.py
 
 This submits the GDPR export request, waits briefly, downloads any new export emails, parses them to JSON, and uploads new rows to Google Sheets. Logs for the run are written to `logs/run_YYYYMMDD_HHMMSS.log`.
 
-> **Note:** Supercell sends the export email asynchronously, so the email from _today's_ request usually won't have arrived by the time `retrieve` runs. That's fine for a daily schedule — each run picks up the export(s) requested on previous days. `retrieve` records the newest email it has seen in `state.json` and resumes from there on the next run, so no email is downloaded twice.
+> **Note:** Supercell sends the export email almost instantly after the request, so `main.py` pauses a few seconds between `request` and `retrieve` to let it land in the inbox — the same run then downloads _today's_ export. `retrieve` records the newest email it has seen in `state.json` and resumes from there on the next run, so no email is downloaded twice.
 
 Schedule it with cron / Task Scheduler / a systemd timer to run once a day.
 

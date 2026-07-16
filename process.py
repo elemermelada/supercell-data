@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------
 def extract_hay_day_data(html_path):
     with open(html_path, encoding="utf-8") as f:
-        soup = BeautifulSoup(f.read(), "html.parser")
+        soup = BeautifulSoup(f.read(), "lxml")
 
     data = {}
 
@@ -136,6 +136,46 @@ def extract_hay_day_data(html_path):
             data["gamecenter"] = m.group(1)
 
     # ---------------------------------------------------------
+    # Surface partial format drift: log any expected field whose regex
+    # matched nothing, so a layout change is visible in the logs before it
+    # silently produces incomplete rows (or trips the hard check below).
+    # ---------------------------------------------------------
+    expected_fields = (
+        "email_date",
+        "name",
+        "age",
+        "farm_created",
+        "farm_country",
+        "farm_ip",
+        "banned",
+        "locked",
+        "total_sessions",
+        "rank",
+        "gems",
+        "reputation_level",
+        "experience_points",
+        "level",
+        "coins",
+        "vouchers",
+        "valley",
+    )
+    # Fields that are legitimately absent for accounts that never used them.
+    # Their absence isn't format drift, so keep it at info level to avoid noise.
+    optional_fields = (
+        "neighborhood",
+        "gamecenter",
+    )
+    unmatched = [f for f in expected_fields if f not in data]
+    if unmatched:
+        logger.warning(
+            f"{html_path}: no match for fields {unmatched} "
+            "(possible export format drift)"
+        )
+    unmatched_optional = [f for f in optional_fields if f not in data]
+    if unmatched_optional:
+        logger.info(f"{html_path}: no match for optional fields {unmatched_optional}")
+
+    # ---------------------------------------------------------
     # Sanity-check the parse: core fields must be present, otherwise
     # the export layout has changed and downstream data would be garbage.
     # ---------------------------------------------------------
@@ -149,7 +189,7 @@ def extract_hay_day_data(html_path):
     # ---------------------------------------------------------
     # Save JSON next to HTML
     # ---------------------------------------------------------
-    json_path = html_path.replace(".html", ".json")
+    json_path = os.path.splitext(html_path)[0] + ".json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
 
@@ -175,7 +215,7 @@ def process(directory="downloads"):
     errors = []
     for filename in html_files:
         html_path = os.path.join(directory, filename)
-        json_path = html_path.replace(".html", ".json")
+        json_path = os.path.splitext(html_path)[0] + ".json"
 
         if os.path.exists(json_path):
             logger.info(f"JSON already exists for {filename}, skipping.")

@@ -15,6 +15,20 @@ logger = get_logger(__name__)
 BEGIN_URL = "https://support.supercell.com/api/gdpr/begin"
 SUBMIT_URL = "https://support.supercell.com/api/gdpr/submit"
 
+# Seconds to wait on any single HTTP call before giving up, so a hung
+# connection can't stall the whole scheduled run indefinitely.
+HTTP_TIMEOUT = 30
+
+# Browser User-Agent sent with the GDPR submit request. Bump the Chrome
+# version here periodically so it doesn't look stale; override via the
+# USER_AGENT env var without touching the code.
+DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/146.0.0.0 Safari/537.36"
+)
+USER_AGENT = os.getenv("USER_AGENT", DEFAULT_USER_AGENT)
+
 
 # ---------------------------------------------------------
 # Fetch cookies from the specified browser
@@ -57,7 +71,7 @@ def fetch_csrf(session: requests.Session, game: str, action: str):
     params = {"game": game, "action": action}
     logger.info("Fetching CSRF token...")
 
-    r = session.get(BEGIN_URL, params=params)
+    r = session.get(BEGIN_URL, params=params, timeout=HTTP_TIMEOUT)
     r.raise_for_status()
 
     csrf_cookie = session.cookies.get("csrf_")
@@ -77,17 +91,13 @@ def submit_request(session: requests.Session, csrf_token: str, game: str, action
         "X-CSRF-Token": csrf_token,
         "Origin": "https://support.supercell.com",
         "Referer": f"https://support.supercell.com/{game}/en/articles/gdpr.html",
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/146.0.0.0 Safari/537.36"
-        ),
+        "User-Agent": USER_AGENT,
     }
 
     payload = {"game": game, "action": action}
 
     logger.info("Submitting GDPR request...")
-    r = session.post(SUBMIT_URL, json=payload, headers=headers)
+    r = session.post(SUBMIT_URL, json=payload, headers=headers, timeout=HTTP_TIMEOUT)
     logger.info(f"Response status: {r.status_code}")
     logger.debug(f"Response body: {r.text}")
 
