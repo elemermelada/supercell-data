@@ -100,7 +100,13 @@ def request():
     load_browser_cookies(session)
 
     csrf_token = fetch_csrf(session, game="hay-day", action="request")
-    submit_request(session, csrf_token, game="hay-day", action="request")
+    response = submit_request(session, csrf_token, game="hay-day", action="request")
+
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"GDPR request failed: HTTP {response.status_code} — "
+            f"{response.text[:200]}"
+        )
 
 
 if __name__ == "__main__":
