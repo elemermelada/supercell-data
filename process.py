@@ -1,7 +1,9 @@
-import os
 import json
+import os
 import re
+
 from bs4 import BeautifulSoup
+
 from logger import get_logger
 
 logger = get_logger(__name__)
@@ -11,7 +13,7 @@ logger = get_logger(__name__)
 # Extract Hay Day data from a single HTML file
 # ---------------------------------------------------------
 def extract_hay_day_data(html_path):
-    with open(html_path, "r", encoding="utf-8") as f:
+    with open(html_path, encoding="utf-8") as f:
         soup = BeautifulSoup(f.read(), "html.parser")
 
     data = {}
@@ -70,7 +72,10 @@ def extract_hay_day_data(html_path):
             data["total_sessions"] = int(m.group(1))
 
         # Neighborhood
-        m = re.search(r"You are a member of a neighborhood called (.+?)\. Your rank is \"(.+?)\"", line)
+        m = re.search(
+            r"You are a member of a neighborhood called (.+?)\. Your rank is \"(.+?)\"",
+            line,
+        )
         if m:
             data["neighborhood"] = m.group(1)
             data["rank"] = m.group(2)
@@ -93,8 +98,9 @@ def extract_hay_day_data(html_path):
 
         # Coins + vouchers
         m = re.search(
-            r"Resources: (\d+) coins and vouchers: (\d+) Blue, (\d+) Green, (\d+) Purple and (\d+) Gold",
-            line
+            r"Resources: (\d+) coins and vouchers: "
+            r"(\d+) Blue, (\d+) Green, (\d+) Purple and (\d+) Gold",
+            line,
         )
         if m:
             data["coins"] = int(m.group(1))
@@ -107,8 +113,10 @@ def extract_hay_day_data(html_path):
 
         # Valley resources
         m = re.search(
-            r"Your Valley resources: (\d+) fuel, (\d+) chickens, (\d+) sanctuary animals, (\d+) sun points and vouchers: (\d+) Blue, (\d+) Green, (\d+) Red",
-            line
+            r"Your Valley resources: (\d+) fuel, (\d+) chickens, "
+            r"(\d+) sanctuary animals, (\d+) sun points and vouchers: "
+            r"(\d+) Blue, (\d+) Green, (\d+) Red",
+            line,
         )
         if m:
             data["valley"] = {
@@ -120,7 +128,7 @@ def extract_hay_day_data(html_path):
                     "blue": int(m.group(5)),
                     "green": int(m.group(6)),
                     "red": int(m.group(7)),
-                }
+                },
             }
 
         # GameCenter
@@ -171,5 +179,6 @@ def process(directory="downloads"):
 # ---------------------------------------------------------
 if __name__ == "__main__":
     from logger import setup_console_logging
+
     setup_console_logging()
     process()

@@ -32,6 +32,17 @@ Optionally create and activate a virtual environment, then install dependencies:
 pip install -r requirements.txt
 ```
 
+### Git hooks (optional)
+
+A pre-commit hook runs `black`, `ruff`, and `mypy` (the same checks as CI) before each commit. Enable it once per clone:
+
+```bash
+pip install black ruff mypy
+git config core.hooksPath .githooks
+```
+
+Bypass for a single commit with `git commit --no-verify`.
+
 ## Configuration
 
 Copy `.env.example` to `.env` and fill in the values. Environment variables must be exported before running — there is no automatic `.env` loading:

@@ -1,11 +1,13 @@
+import email
+import imaplib
 import os
 import re
-import imaplib
-import email
-import requests
+from datetime import datetime
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
-from datetime import datetime
+
+import requests
+
 from logger import get_logger
 
 logger = get_logger(__name__)
@@ -32,7 +34,7 @@ def convert_date(date_str: str) -> str:
 # ---------------------------------------------------------
 def connect_imap():
     if not all([IMAP_SERVER, EMAIL_USER, EMAIL_PASS]):
-        raise EnvironmentError("Missing IMAP environment variables")
+        raise OSError("Missing IMAP environment variables")
 
     logger.info("Connecting to IMAP server...")
     mail = imaplib.IMAP4_SSL(IMAP_SERVER)
@@ -51,10 +53,7 @@ def search_emails(mail, sender: str, since_date: str):
     logger.info(f"Searching for emails FROM '{sender}' SINCE {imap_date}")
 
     mail.select("INBOX")
-    status, data = mail.search(
-        None,
-        f'(FROM "{sender}" SINCE {imap_date})'
-    )
+    status, data = mail.search(None, f'(FROM "{sender}" SINCE {imap_date})')
 
     if status != "OK":
         raise RuntimeError("IMAP search failed")
@@ -156,7 +155,9 @@ def process_email(mail, email_id):
     if isinstance(subject, bytes):
         subject = subject.decode(enc or "utf-8", errors="ignore")
 
-    logger.debug(f"From: {msg.get('From')} | Subject: {subject} | Date: {email_date_raw}")
+    logger.debug(
+        f"From: {msg.get('From')} | Subject: {subject} | Date: {email_date_raw}"
+    )
 
     body = extract_plaintext(msg)
 
@@ -177,17 +178,13 @@ def process_email(mail, email_id):
 # ---------------------------------------------------------
 def retrieve():
     if not SENDER_FILTER:
-        raise EnvironmentError("SENDER_FILTER missing")
+        raise OSError("SENDER_FILTER missing")
 
     since_date = "2024-01-01"
 
     mail = connect_imap()
 
-    email_ids = search_emails(
-        mail,
-        sender=SENDER_FILTER,
-        since_date=since_date
-    )
+    email_ids = search_emails(mail, sender=SENDER_FILTER, since_date=since_date)
 
     for eid in email_ids:
         process_email(mail, eid)
@@ -199,5 +196,6 @@ def retrieve():
 
 if __name__ == "__main__":
     from logger import setup_console_logging
+
     setup_console_logging()
     retrieve()
