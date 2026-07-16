@@ -32,8 +32,7 @@ def extract_hay_day_data(html_path):
     # ---------------------------------------------------------
     hayday_header = soup.find("h2", string="Hay Day")
     if not hayday_header:
-        logger.warning(f"Hay Day section not found in {html_path}")
-        return None
+        raise ValueError(f"Unexpected HTML format in {html_path}: no Hay Day section")
 
     # Collect <p> tags until next <h2>
     hayday_data = []
@@ -137,6 +136,17 @@ def extract_hay_day_data(html_path):
             data["gamecenter"] = m.group(1)
 
     # ---------------------------------------------------------
+    # Sanity-check the parse: core fields must be present, otherwise
+    # the export layout has changed and downstream data would be garbage.
+    # ---------------------------------------------------------
+    core_fields = ("name", "level", "gems")
+    missing = [f for f in core_fields if f not in data]
+    if missing:
+        raise ValueError(
+            f"Unexpected HTML format in {html_path}: missing core fields {missing}"
+        )
+
+    # ---------------------------------------------------------
     # Save JSON next to HTML
     # ---------------------------------------------------------
     json_path = html_path.replace(".html", ".json")
@@ -162,6 +172,7 @@ def process(directory="downloads"):
         logger.info("No HTML files found.")
         return
 
+    errors = []
     for filename in html_files:
         html_path = os.path.join(directory, filename)
         json_path = html_path.replace(".html", ".json")
@@ -171,7 +182,17 @@ def process(directory="downloads"):
             continue
 
         logger.info(f"Processing {filename}...")
-        extract_hay_day_data(html_path)
+        try:
+            extract_hay_day_data(html_path)
+        except Exception as e:
+            logger.error(f"Failed to process {filename}: {e}")
+            errors.append(filename)
+
+    if errors:
+        raise ValueError(
+            f"Failed to parse {len(errors)} HTML file(s) with unexpected format: "
+            f"{errors}"
+        )
 
 
 # ---------------------------------------------------------

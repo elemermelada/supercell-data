@@ -182,8 +182,7 @@ def update(directory="downloads"):
     json_files = [f for f in os.listdir(directory) if f.endswith(".json")]
 
     if not json_files:
-        logger.info("No JSON files found.")
-        return
+        raise RuntimeError(f"No JSON files found in '{directory}' to upload")
 
     all_fields = set()
     rows = []
@@ -213,11 +212,11 @@ def update(directory="downloads"):
         existing_uuids.add(uuid)
         logger.info(f"Queued row for {uuid}")
 
-    if new_rows:
-        sheet.append_rows(new_rows, value_input_option="USER_ENTERED")
-        logger.info(f"Added {len(new_rows)} new rows")
-    else:
-        logger.info("No new rows to add")
+    if not new_rows:
+        raise RuntimeError("No new rows to add (all UUIDs already present in sheet)")
+
+    sheet.append_rows(new_rows, value_input_option="USER_ENTERED")
+    logger.info(f"Added {len(new_rows)} new rows")
 
     format_date_column(sheet, header)
 

@@ -187,17 +187,21 @@ def download_file(url: str):
 # ---------------------------------------------------------
 # Process a single email
 # ---------------------------------------------------------
-def process_email(mail, email_id):
+def process_email(mail, email_id) -> tuple[datetime | None, bool]:
+    """Return (email_date, downloaded). downloaded is True only when the
+    export HTML was successfully fetched and saved."""
     status, msg_data = mail.fetch(email_id, "(RFC822)")
     if status != "OK":
         logger.warning(f"Failed to fetch email ID {email_id}")
-        return None
+        return None, False
 
     raw_email = msg_data[0][1]
     msg = email.message_from_bytes(raw_email)
 
     email_date_raw = msg.get("Date")
-    email_date = ensure_aware(parsedate_to_datetime(email_date_raw))
+    email_date = (
+        ensure_aware(parsedate_to_datetime(email_date_raw)) if email_date_raw else None
+    )
 
     subject, enc = decode_header(msg["Subject"])[0]
     if isinstance(subject, bytes):
@@ -212,14 +216,14 @@ def process_email(mail, email_id):
     url = extract_download_link(body)
     if not url:
         logger.warning("No download link found in email")
-        return email_date
+        return email_date, False
 
     html_path = download_file(url)
     if not html_path:
-        return email_date
+        return email_date, False
 
     append_email_date_to_html(html_path, email_date)
-    return email_date
+    return email_date, True
 
 
 # ---------------------------------------------------------
@@ -234,20 +238,38 @@ def retrieve():
 
     mail = connect_imap()
 
-    email_ids = search_emails(mail, sender=SENDER_FILTER, since_date=since_date)
-
     newest_date = last_date
-    for eid in email_ids:
-        email_date = process_email(mail, eid)
-        if email_date and email_date > newest_date:
-            newest_date = email_date
+    processed = 0
+    try:
+        email_ids = search_emails(mail, sender=SENDER_FILTER, since_date=since_date)
 
-    if newest_date > last_date:
-        write_last_email_date(newest_date)
+        for eid in email_ids:
+            email_date, downloaded = process_email(mail, eid)
+            if email_date and email_date > newest_date:
+                newest_date = email_date
+            # Only count emails newer than the last processed run as "new".
+            if downloaded and email_date and email_date > last_date:
+                processed += 1
 
-    mail.close()
-    mail.logout()
-    logger.info("Done.")
+        if newest_date > last_date:
+            write_last_email_date(newest_date)
+    finally:
+        try:
+            mail.close()
+        except Exception:
+            pass
+        try:
+            mail.logout()
+        except Exception:
+            pass
+
+    if processed == 0:
+        raise RuntimeError(
+            f"No new emails processed (searched FROM '{SENDER_FILTER}' "
+            f"SINCE {since_date})"
+        )
+
+    logger.info(f"Processed {processed} new email(s). Done.")
 
 
 if __name__ == "__main__":
