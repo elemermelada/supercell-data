@@ -6,17 +6,19 @@ _Mostly vibe-coded, but it does the job._
 
 ## What it does
 
-The pipeline runs in four stages:
+`main.py` runs the full pipeline end to end in four stages, and is designed to be run **daily as a scheduled task**:
 
-1. **request** — Authenticates via Chrome cookies + JWT and submits a GDPR data export request to Supercell
-2. **retrieve** — Connects to IMAP, finds the export email, and downloads the HTML data file to `downloads/`
-3. **process** — Parses the HTML export and extracts Hay Day metrics into a JSON file alongside each HTML
-4. **update** — Reads all JSON files from `downloads/` and appends new rows to a Google Sheet (run separately)
+1. **request** — Loads your browser cookies and submits a GDPR data export request to Supercell
+2. **retrieve** — Connects to IMAP, finds new export emails, and downloads the HTML data file to `downloads/`
+3. **process** — Parses each HTML export and extracts Hay Day metrics into a JSON file alongside the HTML
+4. **update** — Reads all JSON files from `downloads/` and appends new rows to a Google Sheet
+
+Supercell only accepts one GDPR request per day, so running the pipeline once a day keeps a rolling history of account snapshots in the sheet.
 
 ## Prerequisites
 
-- Python 3.9+
-- Chrome browser logged in to `support.supercell.com` (cookies are read automatically by `request.py`)
+- Python 3.11
+- A browser (Firefox by default, or Chrome) logged in to `support.supercell.com`. Cookies are read automatically by `request.py` — no manual token copying required.
 - A Google service account JSON file (`service_account.json`) in the project root, with edit access to your target sheet
 
 ## Install
@@ -45,56 +47,52 @@ Bypass for a single commit with `git commit --no-verify`.
 
 ## Configuration
 
-Copy `.env.example` to `.env` and fill in the values. Environment variables must be exported before running — there is no automatic `.env` loading:
+Copy `.env.example` to `.env` and fill in the values. `main.py` loads `.env` automatically via `python-dotenv`, so no manual exporting is needed:
 
 ```bash
-export $(grep -v '^#' .env | xargs)
+cp .env.example .env
 ```
 
-| Variable                       | Required for | Description                                                                                                                                       |
-| ------------------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SUPERCELL_ACCOUNT_INFO_TOKEN` | request      | JWT from your Supercell account session. Find it in Chrome DevTools → Application → Cookies → `support.supercell.com` → `account-user-info-token` |
-| `IMAP_SERVER`                  | retrieve     | IMAP hostname (e.g. `imap.gmail.com`)                                                                                                             |
-| `EMAIL_USER`                   | retrieve     | Email address that receives the GDPR export                                                                                                       |
-| `EMAIL_PASS`                   | retrieve     | Email password or app password                                                                                                                    |
-| `SENDER_FILTER`                | retrieve     | Sender address to filter on (e.g. `no-reply@mydata.supercell.com`)                                                                                |
-| `SPREADSHEET_ID`               | update       | Google Sheets ID from the sheet URL                                                                                                               |
-| `SHEET_NAME`                   | update       | Worksheet tab name (e.g. `HayDayData`)                                                                                                            |
+| Variable         | Required for | Description                                                                           |
+| ---------------- | ------------ | ------------------------------------------------------------------------------------- |
+| `BROWSER_TYPE`   | request      | Browser to read cookies from: `firefox` (default) or `chrome`                         |
+| `IMAP_SERVER`    | retrieve     | IMAP hostname (e.g. `imap.gmail.com`)                                                  |
+| `EMAIL_USER`     | retrieve     | Email address that receives the GDPR export                                           |
+| `EMAIL_PASS`     | retrieve     | Email password or app password                                                        |
+| `SENDER_FILTER`  | retrieve     | Sender address to filter on (e.g. `no-reply@mydata.supercell.com`)                    |
+| `STATE_FILE`     | retrieve     | Optional. Path to the state file tracking the last retrieved email (default `state.json`) |
+| `SPREADSHEET_ID` | update       | Google Sheets ID from the sheet URL                                                   |
+| `SHEET_NAME`     | update       | Worksheet tab name (e.g. `HayDayData`)                                                 |
 
 Place `service_account.json` in the project root.
 
 ## Usage
 
-### Full pipeline: request → retrieve → process
+### Full pipeline (daily task)
 
 ```bash
 python main.py
 ```
 
-This submits the GDPR export request, waits for the email, downloads the HTML, and parses it to JSON. Logs for the run are written to `logs/run_YYYYMMDD_HHMMSS.log`.
+This submits the GDPR export request, waits briefly, downloads any new export emails, parses them to JSON, and uploads new rows to Google Sheets. Logs for the run are written to `logs/run_YYYYMMDD_HHMMSS.log`.
 
-> **Note:** Supercell sends the export email asynchronously. If `retrieve` finds no new emails on the first run, wait a few minutes and run `python retrieve.py` again.
+> **Note:** Supercell sends the export email asynchronously, so the email from _today's_ request usually won't have arrived by the time `retrieve` runs. That's fine for a daily schedule — each run picks up the export(s) requested on previous days. `retrieve` records the newest email it has seen in `state.json` and resumes from there on the next run, so no email is downloaded twice.
 
-### Upload to Google Sheets
-
-```bash
-python update.py
-```
-
-Reads all `.json` files from `downloads/` and appends new rows to the configured sheet. Already-uploaded UUIDs are skipped automatically.
+Schedule it with cron / Task Scheduler / a systemd timer to run once a day.
 
 ### Run individual stages
 
+Each script can be run directly and logs to the console:
+
 ```bash
 python request.py   # submit GDPR export request
-python retrieve.py  # download exported HTML from email
+python retrieve.py  # download exported HTML from new emails
 python process.py   # parse HTML → JSON
+python update.py    # append new JSON rows to Google Sheets
 ```
-
-Each script logs to the console when run directly.
 
 ## Notes
 
-- The JWT (`SUPERCELL_ACCOUNT_INFO_TOKEN`) expires periodically. You'll see a warning in the logs when it's within 3 days of expiry — grab a fresh one from Chrome at that point.
-- `retrieve.py` searches for emails since `2024-01-01` (hardcoded). Edit `since_date` in `retrieve()` if you need a different range.
-- The `downloads/` directory is gitignored. Processed JSON files live there alongside their source HTML.
+- **State tracking:** `retrieve.py` remembers the date of the newest email it processed in `state.json`. On the first run (no state file) it searches from `2024-01-01`. Delete `state.json` to re-scan from that default.
+- **Already-uploaded rows are skipped:** `update.py` keys rows by the export UUID (the HTML filename), so re-running it never duplicates data in the sheet.
+- The `downloads/`, `logs/`, `state.json`, `.env`, and `service_account.json` paths are all gitignored. Processed JSON files live in `downloads/` alongside their source HTML.
