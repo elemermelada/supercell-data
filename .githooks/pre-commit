@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+#
+# Pre-commit hook: mirror the CI lint job so a passing commit means passing CI.
+# Runs black (check), ruff, and mypy over the repo.
+#
+# Enable with:  git config core.hooksPath .githooks
+#
+set -euo pipefail
+
+status=0
+
+echo "==> black --check"
+black --check --diff . || status=1
+
+echo "==> ruff check"
+ruff check . || status=1
+
+echo "==> mypy"
+mypy . || status=1
+
+if [ "$status" -ne 0 ]; then
+	echo
+	echo "Pre-commit checks failed. Fix the issues above, or run:" >&2
+	echo "    black . && ruff check --fix ." >&2
+	echo "(use 'git commit --no-verify' to bypass)" >&2
+fi
+
+exit "$status"
