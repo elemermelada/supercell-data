@@ -51,10 +51,7 @@ def search_emails(mail, sender: str, since_date: str):
     logger.info(f"Searching for emails FROM '{sender}' SINCE {imap_date}")
 
     mail.select("INBOX")
-    status, data = mail.search(
-        None,
-        f'(FROM "{sender}" SINCE {imap_date})'
-    )
+    status, data = mail.search(None, f'(FROM "{sender}" SINCE {imap_date})')
 
     if status != "OK":
         raise RuntimeError("IMAP search failed")
@@ -156,7 +153,9 @@ def process_email(mail, email_id):
     if isinstance(subject, bytes):
         subject = subject.decode(enc or "utf-8", errors="ignore")
 
-    logger.debug(f"From: {msg.get('From')} | Subject: {subject} | Date: {email_date_raw}")
+    logger.debug(
+        f"From: {msg.get('From')} | Subject: {subject} | Date: {email_date_raw}"
+    )
 
     body = extract_plaintext(msg)
 
@@ -183,11 +182,7 @@ def retrieve():
 
     mail = connect_imap()
 
-    email_ids = search_emails(
-        mail,
-        sender=SENDER_FILTER,
-        since_date=since_date
-    )
+    email_ids = search_emails(mail, sender=SENDER_FILTER, since_date=since_date)
 
     for eid in email_ids:
         process_email(mail, eid)
@@ -199,5 +194,6 @@ def retrieve():
 
 if __name__ == "__main__":
     from logger import setup_console_logging
+
     setup_console_logging()
     retrieve()
