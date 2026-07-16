@@ -1,8 +1,9 @@
 import email
 import imaplib
+import json
 import os
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
 
@@ -19,6 +20,53 @@ IMAP_SERVER = os.getenv("IMAP_SERVER")
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASS = os.getenv("EMAIL_PASS")
 SENDER_FILTER = os.getenv("SENDER_FILTER")
+
+# ---------------------------------------------------------
+# Persisted state: last retrieved email date
+# ---------------------------------------------------------
+STATE_FILE = os.getenv("STATE_FILE", "state.json")
+DEFAULT_SINCE = datetime(2024, 1, 1, tzinfo=UTC)
+
+
+# ---------------------------------------------------------
+# Utility: Ensure a datetime is timezone-aware (assume UTC)
+# ---------------------------------------------------------
+def ensure_aware(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt
+
+
+# ---------------------------------------------------------
+# Read last retrieved email date from state file
+# ---------------------------------------------------------
+def read_last_email_date() -> datetime:
+    try:
+        with open(STATE_FILE, encoding="utf-8") as f:
+            state = json.load(f)
+        value = state.get("last_email_date")
+        if value:
+            last = ensure_aware(datetime.fromisoformat(value))
+            logger.info(f"Resuming from last email date: {last.isoformat()}")
+            return last
+    except FileNotFoundError:
+        logger.info(f"No state file at {STATE_FILE}, starting from default date")
+    except Exception as e:
+        logger.warning(f"Could not read state file: {e}")
+
+    return DEFAULT_SINCE
+
+
+# ---------------------------------------------------------
+# Write last retrieved email date to state file
+# ---------------------------------------------------------
+def write_last_email_date(dt: datetime) -> None:
+    try:
+        with open(STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump({"last_email_date": dt.isoformat()}, f)
+        logger.info(f"Saved last email date: {dt.isoformat()}")
+    except Exception as e:
+        logger.warning(f"Could not write state file: {e}")
 
 
 # ---------------------------------------------------------
@@ -143,13 +191,13 @@ def process_email(mail, email_id):
     status, msg_data = mail.fetch(email_id, "(RFC822)")
     if status != "OK":
         logger.warning(f"Failed to fetch email ID {email_id}")
-        return
+        return None
 
     raw_email = msg_data[0][1]
     msg = email.message_from_bytes(raw_email)
 
     email_date_raw = msg.get("Date")
-    email_date = parsedate_to_datetime(email_date_raw)
+    email_date = ensure_aware(parsedate_to_datetime(email_date_raw))
 
     subject, enc = decode_header(msg["Subject"])[0]
     if isinstance(subject, bytes):
@@ -164,13 +212,14 @@ def process_email(mail, email_id):
     url = extract_download_link(body)
     if not url:
         logger.warning("No download link found in email")
-        return
+        return email_date
 
     html_path = download_file(url)
     if not html_path:
-        return
+        return email_date
 
     append_email_date_to_html(html_path, email_date)
+    return email_date
 
 
 # ---------------------------------------------------------
@@ -180,14 +229,21 @@ def retrieve():
     if not SENDER_FILTER:
         raise OSError("SENDER_FILTER missing")
 
-    since_date = "2024-01-01"
+    last_date = read_last_email_date()
+    since_date = last_date.strftime("%Y-%m-%d")
 
     mail = connect_imap()
 
     email_ids = search_emails(mail, sender=SENDER_FILTER, since_date=since_date)
 
+    newest_date = last_date
     for eid in email_ids:
-        process_email(mail, eid)
+        email_date = process_email(mail, eid)
+        if email_date and email_date > newest_date:
+            newest_date = email_date
+
+    if newest_date > last_date:
+        write_last_email_date(newest_date)
 
     mail.close()
     mail.logout()

@@ -209,3 +209,4 @@ __marimo__/
 
 service_account.json
 logs/
+state.json
