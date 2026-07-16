@@ -173,9 +173,7 @@ def update(directory="downloads"):
     sheet_name = os.getenv("SHEET_NAME")
 
     if not spreadsheet_id or not sheet_name:
-        raise OSError(
-            "Missing SPREADSHEET_ID or SHEET_NAME environment variables"
-        )
+        raise OSError("Missing SPREADSHEET_ID or SHEET_NAME environment variables")
 
     creds = Credentials.from_service_account_file("service_account.json", scopes=SCOPES)
     gc = gspread.authorize(creds)
