@@ -15,9 +15,6 @@ from update import update
 
 load_dotenv()
 
-os.makedirs("logs", exist_ok=True)
-log_file = f"logs/run_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-setup_logging(log_file)
 logger = get_logger("main")
 
 # Collected (step_name, exception, traceback) for any step that failed.
@@ -41,14 +38,25 @@ def run_step(fn: Callable[[], None]) -> None:
         failures.append((name, e, tb))
 
 
-run_step(request)
-sleep(5)
-run_step(retrieve)
-run_step(process)
-run_step(update)
+def main() -> None:
+    os.makedirs("logs", exist_ok=True)
+    log_file = f"logs/run_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    setup_logging(log_file)
 
-if failures:
-    logger.warning(f"{len(failures)} step(s) failed; sending alert email")
-    send_failure_email(failures, log_file)
-else:
-    logger.info("All steps completed successfully")
+    run_step(request)
+    # The export email arrives almost instantly after the request, so a short
+    # pause lets it land in the inbox before `retrieve` searches for it.
+    sleep(5)
+    run_step(retrieve)
+    run_step(process)
+    run_step(update)
+
+    if failures:
+        logger.warning(f"{len(failures)} step(s) failed; sending alert email")
+        send_failure_email(failures, log_file)
+    else:
+        logger.info("All steps completed successfully")
+
+
+if __name__ == "__main__":
+    main()

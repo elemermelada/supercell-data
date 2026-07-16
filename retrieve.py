@@ -8,8 +8,11 @@ from email.header import decode_header
 from email.utils import parsedate_to_datetime
 
 import requests
+from dotenv import load_dotenv
 
 from logger import get_logger
+
+load_dotenv()
 
 logger = get_logger(__name__)
 
@@ -26,6 +29,9 @@ SENDER_FILTER = os.getenv("SENDER_FILTER")
 # ---------------------------------------------------------
 STATE_FILE = os.getenv("STATE_FILE", "state.json")
 DEFAULT_SINCE = datetime(2024, 1, 1, tzinfo=UTC)
+
+# Seconds to wait on the file download request before giving up.
+HTTP_TIMEOUT = 30
 
 
 # ---------------------------------------------------------
@@ -62,8 +68,12 @@ def read_last_email_date() -> datetime:
 # ---------------------------------------------------------
 def write_last_email_date(dt: datetime) -> None:
     try:
-        with open(STATE_FILE, "w", encoding="utf-8") as f:
+        # Write to a temp file and atomically replace, so a crash mid-write
+        # can never leave a half-written (corrupt) state file behind.
+        tmp_path = f"{STATE_FILE}.tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump({"last_email_date": dt.isoformat()}, f)
+        os.replace(tmp_path, STATE_FILE)
         logger.info(f"Saved last email date: {dt.isoformat()}")
     except Exception as e:
         logger.warning(f"Could not write state file: {e}")
@@ -82,7 +92,7 @@ def convert_date(date_str: str) -> str:
 # ---------------------------------------------------------
 def connect_imap():
     if not all([IMAP_SERVER, EMAIL_USER, EMAIL_PASS]):
-        raise OSError("Missing IMAP environment variables")
+        raise RuntimeError("Missing IMAP environment variables")
 
     logger.info("Connecting to IMAP server...")
     mail = imaplib.IMAP4_SSL(IMAP_SERVER)
@@ -101,7 +111,10 @@ def search_emails(mail, sender: str, since_date: str):
     logger.info(f"Searching for emails FROM '{sender}' SINCE {imap_date}")
 
     mail.select("INBOX")
-    status, data = mail.search(None, f'(FROM "{sender}" SINCE {imap_date})')
+    # Escape backslashes and quotes so a special character in the sender can't
+    # break out of the IMAP quoted string and corrupt the search query.
+    escaped_sender = sender.replace("\\", "\\\\").replace('"', '\\"')
+    status, data = mail.search(None, f'(FROM "{escaped_sender}" SINCE {imap_date})')
 
     if status != "OK":
         raise RuntimeError("IMAP search failed")
@@ -159,7 +172,7 @@ def download_file(url: str):
     logger.info(f"Downloading data from: {url}")
 
     try:
-        r = requests.get(url)
+        r = requests.get(url, timeout=HTTP_TIMEOUT)
     except Exception as e:
         logger.warning(f"Request failed: {e}")
         return None
@@ -231,7 +244,7 @@ def process_email(mail, email_id) -> tuple[datetime | None, bool]:
 # ---------------------------------------------------------
 def retrieve():
     if not SENDER_FILTER:
-        raise OSError("SENDER_FILTER missing")
+        raise RuntimeError("SENDER_FILTER missing")
 
     last_date = read_last_email_date()
     since_date = last_date.strftime("%Y-%m-%d")
