@@ -31,8 +31,12 @@ SENDER_FILTER = os.getenv("SENDER_FILTER")
 STATE_FILE = os.getenv("STATE_FILE", "state.json")
 DEFAULT_SINCE = datetime(2024, 1, 1, tzinfo=UTC)
 
+# A file existing in DOWNLOAD_DIR is what dedup is based on.
+DOWNLOAD_DIR = "downloads"
+
 # Seconds to wait on the file download request before giving up.
 HTTP_TIMEOUT = 30
+
 
 # ---------------------------------------------------------
 # Retry behavior when no new emails have arrived yet
@@ -40,8 +44,8 @@ HTTP_TIMEOUT = 30
 # The export email arrives shortly after the request, so retrieve() polls for
 # it: up to RETRIEVE_MAX_ATTEMPTS tries, waiting RETRIEVE_RETRY_INTERVAL
 # seconds between them.
-RETRIEVE_RETRY_INTERVAL = int(os.getenv("RETRIEVE_RETRY_INTERVAL", "5"))
-RETRIEVE_MAX_ATTEMPTS = int(os.getenv("RETRIEVE_MAX_ATTEMPTS", "12"))
+RETRIEVE_RETRY_INTERVAL = max(1, int(os.getenv("RETRIEVE_RETRY_INTERVAL", "5")))
+RETRIEVE_MAX_ATTEMPTS = max(1, int(os.getenv("RETRIEVE_MAX_ATTEMPTS", "12")))
 
 
 # ---------------------------------------------------------
@@ -78,15 +82,16 @@ def read_last_email_date() -> datetime:
 # ---------------------------------------------------------
 def write_last_email_date(dt: datetime) -> None:
     try:
-        # Write to a temp file and atomically replace, so a crash mid-write
-        # can never leave a half-written (corrupt) state file behind.
+        # Atomic replace so a crash mid-write can't corrupt the state file.
         tmp_path = f"{STATE_FILE}.tmp"
         with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump({"last_email_date": dt.isoformat()}, f)
         os.replace(tmp_path, STATE_FILE)
         logger.info(f"Saved last email date: {dt.isoformat()}")
     except Exception as e:
-        logger.warning(f"Could not write state file: {e}")
+        # Don't raise: a state-write failure must not fail a successful
+        # download; the skip path repairs the state file on the next run.
+        logger.error(f"Could not write state file: {e}")
 
 
 # ---------------------------------------------------------
@@ -157,6 +162,9 @@ def extract_download_link(body: str):
     Must:
       - start with https://mydata.supercell.com/data/
       - end with .html
+
+    The matched tail is used verbatim as the on-disk filename, so this regex
+    is also what sanitizes it.
     """
     pattern = r"https://mydata\.supercell\.com/data/[A-Za-z0-9\-_]+\.html"
     match = re.search(pattern, body)
@@ -178,45 +186,70 @@ def append_email_date_to_html(html_path, email_date):
 # ---------------------------------------------------------
 # Download the linked file
 # ---------------------------------------------------------
-def download_file(url: str):
+def download_file(url: str) -> tuple[str, str | None]:
+    """Download ``url`` into DOWNLOAD_DIR.
+
+    Returns a ``(status, path)`` tuple:
+      - ``("downloaded", path)`` — the export was newly fetched and saved.
+      - ``("skipped", path)`` — the export file or an expired stub is already
+        on disk; no HTTP request is made.
+      - ``("failed", None)`` — transient error, or a 403 (permanently expired
+        link) that wrote a stub so the dead link is never re-requested.
+    """
+    filename = url.split("/")[-1]
+    filepath = os.path.join(DOWNLOAD_DIR, filename)
+    # Non-.html extension keeps process() from treating the stub as an export.
+    stub_path = os.path.splitext(filepath)[0] + ".expired"
+
+    if os.path.exists(filepath):
+        logger.debug(f"Already downloaded {filename}, skipping")
+        return "skipped", filepath
+
+    if os.path.exists(stub_path):
+        logger.debug(f"Link for {filename} previously expired, skipping")
+        return "skipped", stub_path
+
     logger.info(f"Downloading data from: {url}")
 
     try:
         r = requests.get(url, timeout=HTTP_TIMEOUT)
     except Exception as e:
         logger.warning(f"Request failed: {e}")
-        return None
+        return "failed", None
+
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
     if r.status_code == 403:
-        logger.warning("Link expired (HTTP 403). Skipping.")
-        return None
+        logger.warning("Link expired (HTTP 403). Writing stub so it is not retried.")
+        with open(stub_path, "w", encoding="utf-8") as f:
+            f.write("<!-- EXPIRED: link returned HTTP 403 -->\n")
+        return "failed", None
 
     if r.status_code != 200:
         logger.warning(f"Unexpected status code {r.status_code}. Skipping.")
-        return None
+        return "failed", None
 
-    os.makedirs("downloads", exist_ok=True)
-
-    filename = url.split("/")[-1]
-    filepath = os.path.join("downloads", filename)
-
-    with open(filepath, "wb") as f:
+    # Atomic replace: a truncated .html would be treated as complete by dedup
+    # forever.
+    tmp_path = f"{filepath}.tmp"
+    with open(tmp_path, "wb") as f:
         f.write(r.content)
+    os.replace(tmp_path, filepath)
 
     logger.info(f"Saved file to: {filepath}")
-    return filepath
+    return "downloaded", filepath
 
 
 # ---------------------------------------------------------
 # Process a single email
 # ---------------------------------------------------------
-def process_email(mail, email_id) -> tuple[datetime | None, bool]:
-    """Return (email_date, downloaded). downloaded is True only when the
-    export HTML was successfully fetched and saved."""
-    status, msg_data = mail.fetch(email_id, "(RFC822)")
-    if status != "OK":
+def process_email(mail, email_id) -> tuple[datetime | None, str]:
+    """Return ``(email_date, status)`` where status is one of ``"downloaded"``,
+    ``"skipped"`` or ``"failed"`` (see download_file)."""
+    fetch_status, msg_data = mail.fetch(email_id, "(RFC822)")
+    if fetch_status != "OK":
         logger.warning(f"Failed to fetch email ID {email_id}")
-        return None, False
+        return None, "failed"
 
     raw_email = msg_data[0][1]
     msg = email.message_from_bytes(raw_email)
@@ -239,45 +272,54 @@ def process_email(mail, email_id) -> tuple[datetime | None, bool]:
     url = extract_download_link(body)
     if not url:
         logger.warning("No download link found in email")
-        return email_date, False
+        return email_date, "failed"
 
-    html_path = download_file(url)
-    if not html_path:
-        return email_date, False
-
-    append_email_date_to_html(html_path, email_date)
-    return email_date, True
+    download_status, saved_path = download_file(url)
+    if download_status == "downloaded":
+        append_email_date_to_html(saved_path, email_date)
+    return email_date, download_status
 
 
 # ---------------------------------------------------------
 # Single retrieval attempt
 # ---------------------------------------------------------
-def _retrieve_once(sender: str) -> int:
+def _retrieve_once(sender: str, last_date: datetime) -> int:
     """Run one connect → search → process → write-state → cleanup pass.
 
-    Returns the number of new emails processed. Opens (and closes) a fresh
-    IMAP connection so each attempt is independent. Transient IMAP/network
-    errors propagate to the caller and are not retried here.
+    ``last_date`` is the resumed state (read once by the caller) and narrows
+    the search window. Returns the number of newly downloaded emails. Opens (and
+    closes) a fresh IMAP connection so each attempt is independent. Transient
+    IMAP/network errors propagate to the caller and are not retried here.
     """
-    last_date = read_last_email_date()
     since_date = last_date.strftime("%Y-%m-%d")
 
     mail = connect_imap()
 
     newest_date = last_date
-    processed = 0
+    downloaded = 0
+    skipped = 0
     try:
         email_ids = search_emails(mail, sender=sender, since_date=since_date)
 
         for eid in email_ids:
-            email_date, downloaded = process_email(mail, eid)
+            email_date, status = process_email(mail, eid)
+
+            # A skip advances the date but does NOT end the poll: a stale
+            # same-day email must not satisfy a freshly requested export
+            # (IMAP SINCE is day-granular).
+            if status == "downloaded":
+                downloaded += 1
+            elif status == "skipped":
+                skipped += 1
+            else:
+                continue
+
             if email_date and email_date > newest_date:
                 newest_date = email_date
-            # Only count emails newer than the last processed run as "new".
-            if downloaded and email_date and email_date > last_date:
-                processed += 1
 
-        if newest_date > last_date:
+        # Write state even on skips: it repairs a failed state write from a
+        # previous run.
+        if downloaded + skipped > 0:
             write_last_email_date(newest_date)
     finally:
         try:
@@ -289,7 +331,7 @@ def _retrieve_once(sender: str) -> int:
         except Exception:
             pass
 
-    return processed
+    return downloaded
 
 
 # ---------------------------------------------------------
@@ -299,14 +341,30 @@ def retrieve():
     if not SENDER_FILTER:
         raise RuntimeError("SENDER_FILTER missing")
 
-    # The export email may take a moment to land, so poll for it. Only the
-    # "no new emails yet" case retries; transient IMAP/network errors from
-    # _retrieve_once() propagate immediately.
+    # Read state once so the search window is fixed for the whole poll.
+    last_date = read_last_email_date()
+    since_date = last_date.strftime("%Y-%m-%d")
+
+    # The export email may take a moment to land, so poll for it.
     for attempt in range(1, RETRIEVE_MAX_ATTEMPTS + 1):
-        processed = _retrieve_once(SENDER_FILTER)
-        if processed > 0:
-            logger.info(f"Processed {processed} new email(s). Done.")
-            return
+        try:
+            downloaded = _retrieve_once(SENDER_FILTER, last_date)
+        except PermissionError:
+            # Permanent local failure (unwritable downloads/ or state file) —
+            # fail fast instead of retrying it as a network error.
+            raise
+        except (imaplib.IMAP4.error, OSError) as e:
+            # OSError covers ConnectionError, TimeoutError and socket.timeout,
+            # which flaky networks surface through imaplib.
+            logger.warning(
+                f"Transient IMAP/network error on attempt "
+                f"{attempt}/{RETRIEVE_MAX_ATTEMPTS}: {e}"
+            )
+            downloaded = 0
+        else:
+            if downloaded > 0:
+                logger.info(f"Processed {downloaded} new email(s). Done.")
+                return
 
         if attempt < RETRIEVE_MAX_ATTEMPTS:
             logger.info(
@@ -315,7 +373,6 @@ def retrieve():
             )
             sleep(RETRIEVE_RETRY_INTERVAL)
 
-    since_date = read_last_email_date().strftime("%Y-%m-%d")
     raise RuntimeError(
         f"No new emails processed (searched FROM '{SENDER_FILTER}' "
         f"SINCE {since_date})"
