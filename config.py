@@ -17,7 +17,11 @@ from dataclasses import dataclass
 
 from dotenv import load_dotenv
 
+from logger import get_logger
+
 load_dotenv()
+
+logger = get_logger(__name__)
 
 
 class ConfigError(RuntimeError):
@@ -35,6 +39,10 @@ DEFAULT_USER_AGENT = (
 
 BROWSER_CHOICES = frozenset({"firefox", "chrome"})
 
+# Directory exports are downloaded into (retrieve) and read back from (update).
+# Shared here so the two steps can't drift to different paths.
+DOWNLOAD_DIR = "downloads"
+
 
 # ---------------------------------------------------------
 # Validators — each raises ConfigError so failures are one
@@ -44,7 +52,8 @@ BROWSER_CHOICES = frozenset({"firefox", "chrome"})
 def _parse_int_env(name: str, default: int, minimum: int) -> int:
     """Parse an integer env var, raising ConfigError on malformed input and
     clamping to a sensible minimum (e.g. so attempts is never < 1 and the
-    sleep interval is never negative)."""
+    sleep interval is never below 1s). A clamp is logged as a warning so a
+    misconfiguration doesn't silently take a different value than intended."""
     raw = os.getenv(name)
     if raw is None or raw.strip() == "":
         value = default
@@ -55,7 +64,12 @@ def _parse_int_env(name: str, default: int, minimum: int) -> int:
             raise ConfigError(
                 f"Invalid value for {name}: {raw!r} (expected an integer)"
             ) from None
-    return max(minimum, value)
+    if value < minimum:
+        logger.warning(
+            f"{name}={value} is below the minimum of {minimum}; using {minimum}"
+        )
+        return minimum
+    return value
 
 
 def _parse_choice_env(name: str, default: str, choices: frozenset[str]) -> str:
@@ -125,7 +139,7 @@ class Settings:
             sender_filter=os.getenv("SENDER_FILTER"),
             state_file=os.getenv("STATE_FILE", "state.json"),
             retrieve_retry_interval=_parse_int_env(
-                "RETRIEVE_RETRY_INTERVAL", 5, minimum=0
+                "RETRIEVE_RETRY_INTERVAL", 5, minimum=1
             ),
             retrieve_max_attempts=_parse_int_env(
                 "RETRIEVE_MAX_ATTEMPTS", 12, minimum=1

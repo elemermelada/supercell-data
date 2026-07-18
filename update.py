@@ -7,7 +7,7 @@ from dateutil import parser
 from google.oauth2.service_account import Credentials
 from gspread.utils import rowcol_to_a1
 
-from config import settings
+from config import DOWNLOAD_DIR, settings
 from logger import get_logger
 
 logger = get_logger(__name__)
@@ -196,7 +196,7 @@ def format_date_column(sheet, header):
 # ---------------------------------------------------------
 # Insert missing rows
 # ---------------------------------------------------------
-def update(directory="downloads"):
+def update(directory=DOWNLOAD_DIR):
     spreadsheet_id, sheet_name = settings.require_sheets()
 
     # Match process()'s behaviour: a missing downloads directory means there's

@@ -10,7 +10,7 @@ from time import sleep
 
 import requests
 
-from config import settings
+from config import DOWNLOAD_DIR, settings
 from logger import get_logger
 
 logger = get_logger(__name__)
@@ -21,8 +21,7 @@ logger = get_logger(__name__)
 STATE_FILE = settings.state_file
 DEFAULT_SINCE = datetime(2024, 1, 1, tzinfo=UTC)
 
-# A file existing in DOWNLOAD_DIR is what dedup is based on.
-DOWNLOAD_DIR = "downloads"
+# A file existing in DOWNLOAD_DIR (shared via config) is what dedup is based on.
 
 # Seconds to wait on the file download request before giving up.
 HTTP_TIMEOUT = 30
