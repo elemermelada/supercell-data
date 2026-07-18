@@ -4,13 +4,11 @@ import re
 
 import gspread
 from dateutil import parser
-from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
 from gspread.utils import rowcol_to_a1
 
+from config import settings
 from logger import get_logger
-
-load_dotenv()
 
 logger = get_logger(__name__)
 
@@ -199,11 +197,7 @@ def format_date_column(sheet, header):
 # Insert missing rows
 # ---------------------------------------------------------
 def update(directory="downloads"):
-    spreadsheet_id = os.getenv("SPREADSHEET_ID")
-    sheet_name = os.getenv("SHEET_NAME")
-
-    if not spreadsheet_id or not sheet_name:
-        raise RuntimeError("Missing SPREADSHEET_ID or SHEET_NAME environment variables")
+    spreadsheet_id, sheet_name = settings.require_sheets()
 
     # Match process()'s behaviour: a missing downloads directory means there's
     # simply nothing to upload, so warn and return instead of crashing.

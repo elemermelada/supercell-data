@@ -1,14 +1,11 @@
-import os
 from collections.abc import Callable
 from http.cookiejar import CookieJar
 
 import browser_cookie3
 import requests
-from dotenv import load_dotenv
 
+from config import settings
 from logger import get_logger
-
-load_dotenv()
 
 logger = get_logger(__name__)
 
@@ -19,30 +16,23 @@ SUBMIT_URL = "https://support.supercell.com/api/gdpr/submit"
 # connection can't stall the whole scheduled run indefinitely.
 HTTP_TIMEOUT = 30
 
-# Browser User-Agent sent with the GDPR submit request. Bump the Chrome
-# version here periodically so it doesn't look stale; override via the
-# USER_AGENT env var without touching the code.
-DEFAULT_USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/146.0.0.0 Safari/537.36"
-)
-USER_AGENT = os.getenv("USER_AGENT", DEFAULT_USER_AGENT)
+USER_AGENT = settings.user_agent
 
 
 # ---------------------------------------------------------
 # Fetch cookies from the specified browser
 # ---------------------------------------------------------
 def browser_cookie_fetcher() -> Callable[..., CookieJar]:
-    browser_type = os.getenv("BROWSER_TYPE", "firefox").lower()
+    # config.py validated browser_type against BROWSER_CHOICES at import, so it
+    # is guaranteed to be one of the keys below.
+    browser_type = settings.browser_type
     logger.info(f"Using browser type: {browser_type}")
 
-    if browser_type == "firefox":
-        return browser_cookie3.firefox
-    elif browser_type == "chrome":
-        return browser_cookie3.chrome
-    else:
-        raise ValueError(f"Unsupported browser type: {browser_type}")
+    fetchers: dict[str, Callable[..., CookieJar]] = {
+        "firefox": browser_cookie3.firefox,
+        "chrome": browser_cookie3.chrome,
+    }
+    return fetchers[browser_type]
 
 
 # ---------------------------------------------------------

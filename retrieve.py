@@ -9,26 +9,16 @@ from email.utils import parsedate_to_datetime
 from time import sleep
 
 import requests
-from dotenv import load_dotenv
 
+from config import settings
 from logger import get_logger
-
-load_dotenv()
 
 logger = get_logger(__name__)
 
 # ---------------------------------------------------------
-# Environment variables
-# ---------------------------------------------------------
-IMAP_SERVER = os.getenv("IMAP_SERVER")
-EMAIL_USER = os.getenv("EMAIL_USER")
-EMAIL_PASS = os.getenv("EMAIL_PASS")
-SENDER_FILTER = os.getenv("SENDER_FILTER")
-
-# ---------------------------------------------------------
 # Persisted state: last retrieved email date
 # ---------------------------------------------------------
-STATE_FILE = os.getenv("STATE_FILE", "state.json")
+STATE_FILE = settings.state_file
 DEFAULT_SINCE = datetime(2024, 1, 1, tzinfo=UTC)
 
 # A file existing in DOWNLOAD_DIR is what dedup is based on.
@@ -37,15 +27,14 @@ DOWNLOAD_DIR = "downloads"
 # Seconds to wait on the file download request before giving up.
 HTTP_TIMEOUT = 30
 
-
 # ---------------------------------------------------------
 # Retry behavior when no new emails have arrived yet
 # ---------------------------------------------------------
 # The export email arrives shortly after the request, so retrieve() polls for
 # it: up to RETRIEVE_MAX_ATTEMPTS tries, waiting RETRIEVE_RETRY_INTERVAL
 # seconds between them.
-RETRIEVE_RETRY_INTERVAL = max(1, int(os.getenv("RETRIEVE_RETRY_INTERVAL", "5")))
-RETRIEVE_MAX_ATTEMPTS = max(1, int(os.getenv("RETRIEVE_MAX_ATTEMPTS", "12")))
+RETRIEVE_RETRY_INTERVAL = settings.retrieve_retry_interval
+RETRIEVE_MAX_ATTEMPTS = settings.retrieve_max_attempts
 
 
 # ---------------------------------------------------------
@@ -106,12 +95,11 @@ def convert_date(date_str: str) -> str:
 # Connect to IMAP
 # ---------------------------------------------------------
 def connect_imap():
-    if not all([IMAP_SERVER, EMAIL_USER, EMAIL_PASS]):
-        raise RuntimeError("Missing IMAP environment variables")
+    imap_server, email_user, email_pass = settings.require_imap()
 
     logger.info("Connecting to IMAP server...")
-    mail = imaplib.IMAP4_SSL(IMAP_SERVER)
-    mail.login(EMAIL_USER, EMAIL_PASS)
+    mail = imaplib.IMAP4_SSL(imap_server)
+    mail.login(email_user, email_pass)
     logger.info("Logged in successfully")
 
     return mail
@@ -338,8 +326,7 @@ def _retrieve_once(sender: str, last_date: datetime) -> int:
 # Main entry point
 # ---------------------------------------------------------
 def retrieve():
-    if not SENDER_FILTER:
-        raise RuntimeError("SENDER_FILTER missing")
+    sender_filter = settings.require_sender_filter()
 
     # Read state once so the search window is fixed for the whole poll.
     last_date = read_last_email_date()
@@ -348,7 +335,7 @@ def retrieve():
     # The export email may take a moment to land, so poll for it.
     for attempt in range(1, RETRIEVE_MAX_ATTEMPTS + 1):
         try:
-            downloaded = _retrieve_once(SENDER_FILTER, last_date)
+            downloaded = _retrieve_once(sender_filter, last_date)
         except PermissionError:
             # Permanent local failure (unwritable downloads/ or state file) —
             # fail fast instead of retrying it as a network error.
@@ -374,7 +361,7 @@ def retrieve():
             sleep(RETRIEVE_RETRY_INTERVAL)
 
     raise RuntimeError(
-        f"No new emails processed (searched FROM '{SENDER_FILTER}' "
+        f"No new emails processed (searched FROM '{sender_filter}' "
         f"SINCE {since_date})"
     )
 

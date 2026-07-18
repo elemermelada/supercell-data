@@ -3,16 +3,12 @@ import traceback
 from collections.abc import Callable
 from datetime import datetime
 
-from dotenv import load_dotenv
-
 from logger import get_logger, setup_logging
 from notify import send_failure_email
 from process import process
 from request import request
 from retrieve import retrieve
 from update import update
-
-load_dotenv()
 
 logger = get_logger("main")
 
