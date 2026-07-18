@@ -2,7 +2,6 @@ import os
 import traceback
 from collections.abc import Callable
 from datetime import datetime
-from time import sleep
 
 from dotenv import load_dotenv
 
@@ -44,9 +43,6 @@ def main() -> None:
     setup_logging(log_file)
 
     run_step(request)
-    # The export email arrives almost instantly after the request, so a short
-    # pause lets it land in the inbox before `retrieve` searches for it.
-    sleep(5)
     run_step(retrieve)
     run_step(process)
     run_step(update)

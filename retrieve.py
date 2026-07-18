@@ -6,6 +6,7 @@ import re
 from datetime import UTC, datetime
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
+from time import sleep
 
 import requests
 from dotenv import load_dotenv
@@ -32,6 +33,15 @@ DEFAULT_SINCE = datetime(2024, 1, 1, tzinfo=UTC)
 
 # Seconds to wait on the file download request before giving up.
 HTTP_TIMEOUT = 30
+
+# ---------------------------------------------------------
+# Retry behavior when no new emails have arrived yet
+# ---------------------------------------------------------
+# The export email arrives shortly after the request, so retrieve() polls for
+# it: up to RETRIEVE_MAX_ATTEMPTS tries, waiting RETRIEVE_RETRY_INTERVAL
+# seconds between them.
+RETRIEVE_RETRY_INTERVAL = int(os.getenv("RETRIEVE_RETRY_INTERVAL", "5"))
+RETRIEVE_MAX_ATTEMPTS = int(os.getenv("RETRIEVE_MAX_ATTEMPTS", "12"))
 
 
 # ---------------------------------------------------------
@@ -240,12 +250,15 @@ def process_email(mail, email_id) -> tuple[datetime | None, bool]:
 
 
 # ---------------------------------------------------------
-# Main entry point
+# Single retrieval attempt
 # ---------------------------------------------------------
-def retrieve():
-    if not SENDER_FILTER:
-        raise RuntimeError("SENDER_FILTER missing")
+def _retrieve_once(sender: str) -> int:
+    """Run one connect → search → process → write-state → cleanup pass.
 
+    Returns the number of new emails processed. Opens (and closes) a fresh
+    IMAP connection so each attempt is independent. Transient IMAP/network
+    errors propagate to the caller and are not retried here.
+    """
     last_date = read_last_email_date()
     since_date = last_date.strftime("%Y-%m-%d")
 
@@ -254,7 +267,7 @@ def retrieve():
     newest_date = last_date
     processed = 0
     try:
-        email_ids = search_emails(mail, sender=SENDER_FILTER, since_date=since_date)
+        email_ids = search_emails(mail, sender=sender, since_date=since_date)
 
         for eid in email_ids:
             email_date, downloaded = process_email(mail, eid)
@@ -276,13 +289,37 @@ def retrieve():
         except Exception:
             pass
 
-    if processed == 0:
-        raise RuntimeError(
-            f"No new emails processed (searched FROM '{SENDER_FILTER}' "
-            f"SINCE {since_date})"
-        )
+    return processed
 
-    logger.info(f"Processed {processed} new email(s). Done.")
+
+# ---------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------
+def retrieve():
+    if not SENDER_FILTER:
+        raise RuntimeError("SENDER_FILTER missing")
+
+    # The export email may take a moment to land, so poll for it. Only the
+    # "no new emails yet" case retries; transient IMAP/network errors from
+    # _retrieve_once() propagate immediately.
+    for attempt in range(1, RETRIEVE_MAX_ATTEMPTS + 1):
+        processed = _retrieve_once(SENDER_FILTER)
+        if processed > 0:
+            logger.info(f"Processed {processed} new email(s). Done.")
+            return
+
+        if attempt < RETRIEVE_MAX_ATTEMPTS:
+            logger.info(
+                f"No new emails yet, retrying in {RETRIEVE_RETRY_INTERVAL}s "
+                f"(attempt {attempt}/{RETRIEVE_MAX_ATTEMPTS})"
+            )
+            sleep(RETRIEVE_RETRY_INTERVAL)
+
+    since_date = read_last_email_date().strftime("%Y-%m-%d")
+    raise RuntimeError(
+        f"No new emails processed (searched FROM '{SENDER_FILTER}' "
+        f"SINCE {since_date})"
+    )
 
 
 if __name__ == "__main__":
