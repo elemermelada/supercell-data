@@ -33,13 +33,20 @@ class FakeMail:
 
     ``fetch_status`` defaults to ``"OK"``; pass e.g. ``"NO"`` to exercise the
     fetch-failure branch in process_email.
+
+    Each ``fetch`` call is recorded in ``fetch_calls`` as an ``(email_id, spec)``
+    tuple so tests can assert process_email fetches the right id with the right
+    ``(RFC822)`` spec (a wrong-fetch-spec regression would otherwise pass
+    silently).
     """
 
     def __init__(self, raw_email: bytes, fetch_status: str = "OK"):
         self._raw = raw_email
         self._fetch_status = fetch_status
+        self.fetch_calls: list[tuple] = []
 
     def fetch(self, email_id, spec):
+        self.fetch_calls.append((email_id, spec))
         return self._fetch_status, [(b"1 (RFC822 {N}", self._raw)]
 
 

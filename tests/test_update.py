@@ -5,6 +5,9 @@ No gspread network access — ``ensure_header_row`` is exercised against a
 (or, without pytest: python -m unittest tests.test_update)
 """
 
+import json
+import os
+import tempfile
 import unittest
 from unittest import mock
 
@@ -172,6 +175,100 @@ class ImportGuardTests(unittest.TestCase):
 
     def test_flatten_keys_match_column_order(self):
         self.assertEqual(set(update.flatten({}, "")), set(update.COLUMN_ORDER))
+
+
+class UpdateEntryPointTests(unittest.TestCase):
+    """The update() entry point: auth wiring, sort, dedup and batch write.
+
+    gspread and the service-account credentials are fully mocked; the sheet is a
+    ``Mock`` so no network access happens.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.dir = self._tmp.name
+
+        settings_mock = mock.patch.object(update, "settings").start()
+        settings_mock.require_sheets.return_value = ("sheet-id", "Tab1")
+        mock.patch.object(update, "Credentials").start()
+        self.addCleanup(mock.patch.stopall)
+
+        # gspread.authorize(...) -> gc.open_by_key(...).worksheet(...) -> sheet
+        self.sheet = mock.Mock()
+        # A fresh (empty) sheet: header gets created, no pre-existing uuids.
+        self.sheet.row_values.return_value = []
+        self.sheet.col_values.return_value = []
+        gc = mock.Mock()
+        gc.open_by_key.return_value.worksheet.return_value = self.sheet
+        mock.patch.object(update.gspread, "authorize", return_value=gc).start()
+
+    def _write_json(self, name, data):
+        with open(os.path.join(self.dir, name), "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+    def test_missing_directory_warns_and_returns(self):
+        missing = os.path.join(self.dir, "nope")
+        # No auth, no write — just a graceful no-op like process().
+        update.update(directory=missing)
+        self.sheet.append_rows.assert_not_called()
+
+    def test_no_json_files_raises(self):
+        with self.assertRaises(RuntimeError):
+            update.update(directory=self.dir)
+        self.sheet.append_rows.assert_not_called()
+
+    def test_appends_new_rows_sorted_by_date(self):
+        self._write_json(
+            "uuid-b.json", {"email_date": "2024-03-09T08:00:00+00:00", "name": "B"}
+        )
+        self._write_json(
+            "uuid-a.json", {"email_date": "2024-01-01T12:00:00+00:00", "name": "A"}
+        )
+
+        update.update(directory=self.dir)
+
+        self.sheet.append_rows.assert_called_once()
+        (rows,), kwargs = self.sheet.append_rows.call_args
+        self.assertEqual(kwargs.get("value_input_option"), "USER_ENTERED")
+        header = update.COLUMN_ORDER
+        date_col = header.index("email_date")
+        name_col = header.index("name")
+        # Rows are sorted chronologically before writing.
+        self.assertEqual(
+            [r[date_col] for r in rows],
+            ["2024-01-01 12:00:00", "2024-03-09 08:00:00"],
+        )
+        self.assertEqual([r[name_col] for r in rows], ["A", "B"])
+
+    def test_skips_uuids_already_in_sheet(self):
+        self._write_json("dupe.json", {"name": "already-there"})
+        self._write_json("fresh.json", {"name": "new"})
+        # uuid column already contains "dupe" (plus the header cell).
+        uuid_col = update.COLUMN_ORDER.index("uuid") + 1
+
+        def col_values(col):
+            return ["uuid", "dupe"] if col == uuid_col else []
+
+        self.sheet.col_values.side_effect = col_values
+
+        update.update(directory=self.dir)
+
+        (rows,), _ = self.sheet.append_rows.call_args
+        uuid_idx = update.COLUMN_ORDER.index("uuid")
+        written_uuids = [r[uuid_idx] for r in rows]
+        self.assertEqual(written_uuids, ["fresh"])
+
+    def test_all_uuids_present_raises(self):
+        self._write_json("dupe.json", {"name": "x"})
+        uuid_col = update.COLUMN_ORDER.index("uuid") + 1
+        self.sheet.col_values.side_effect = lambda col: (
+            ["uuid", "dupe"] if col == uuid_col else []
+        )
+
+        with self.assertRaises(RuntimeError):
+            update.update(directory=self.dir)
+        self.sheet.append_rows.assert_not_called()
 
 
 if __name__ == "__main__":

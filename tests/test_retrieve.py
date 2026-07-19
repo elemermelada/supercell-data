@@ -98,10 +98,101 @@ class SearchEmailsTests(unittest.TestCase):
             retrieve.search_emails(mail, sender="x@y.com", since_date="2024-01-01")
 
 
+class ConnectImapTests(unittest.TestCase):
+    def test_connects_logs_in_and_returns_mail(self):
+        # connect_imap must SSL-connect to the configured server and log in with
+        # the configured credentials, returning the live connection object.
+        conn = mock.Mock()
+        with (
+            mock.patch.object(retrieve, "settings") as settings_mock,
+            mock.patch.object(retrieve.imaplib, "IMAP4_SSL", return_value=conn) as ssl,
+        ):
+            settings_mock.require_imap.return_value = (
+                "imap.example.com",
+                "user@example.com",
+                "hunter2",
+            )
+            result = retrieve.connect_imap()
+
+        ssl.assert_called_once_with("imap.example.com")
+        conn.login.assert_called_once_with("user@example.com", "hunter2")
+        self.assertIs(result, conn)
+
+
+class DownloadFileTests(TempDownloadDirMixin):
+    URL = "https://mydata.supercell.com/data/xyz789.html"
+    FILENAME = "xyz789.html"
+
+    def test_passes_http_timeout(self):
+        # The request must be bounded by HTTP_TIMEOUT so a hung server can't
+        # stall the whole pipeline.
+        fake_resp = mock.Mock(status_code=200, content=b"<html></html>")
+        with mock.patch.object(retrieve.requests, "get", return_value=fake_resp) as get:
+            retrieve.download_file(self.URL)
+
+        _, kwargs = get.call_args
+        self.assertEqual(kwargs.get("timeout"), retrieve.HTTP_TIMEOUT)
+
+    def test_timeout_returns_failed_and_leaves_no_file(self):
+        # A requests timeout is a transient failure: no file, no stub, no tmp.
+        with mock.patch.object(
+            retrieve.requests, "get", side_effect=retrieve.requests.exceptions.Timeout
+        ):
+            status, path = retrieve.download_file(self.URL)
+
+        self.assertEqual(status, "failed")
+        self.assertIsNone(path)
+        self.assertEqual(os.listdir(self.download_dir), [])
+
+    def test_atomic_write_replaces_from_tmp_and_writes_full_content(self):
+        # The export must be written to a ``.tmp`` sibling and then os.replace'd
+        # into place, so a crash mid-write can never leave a truncated .html
+        # that dedup would treat as complete forever.
+        filepath = os.path.join(self.download_dir, self.FILENAME)
+        tmp_path = f"{filepath}.tmp"
+
+        real_replace = os.replace
+        seen = {}
+
+        def spy_replace(src, dst):
+            # At replace time the payload lives in the tmp file, not the target.
+            seen["src"] = src
+            seen["src_exists_before"] = os.path.exists(src)
+            seen["dst_exists_before"] = os.path.exists(dst)
+            return real_replace(src, dst)
+
+        fake_resp = mock.Mock(status_code=200, content=b"<html>full</html>")
+        with (
+            mock.patch.object(retrieve.requests, "get", return_value=fake_resp),
+            mock.patch.object(retrieve.os, "replace", side_effect=spy_replace),
+        ):
+            status, path = retrieve.download_file(self.URL)
+
+        self.assertEqual(status, "downloaded")
+        self.assertEqual(path, filepath)
+        self.assertEqual(seen["src"], tmp_path)
+        self.assertTrue(seen["src_exists_before"])
+        self.assertFalse(seen["dst_exists_before"])
+        # Final file holds the whole payload; the tmp file is gone.
+        with open(filepath, "rb") as f:
+            self.assertEqual(f.read(), b"<html>full</html>")
+        self.assertFalse(os.path.exists(tmp_path))
+
+
 class ProcessEmailDedupTests(TempDownloadDirMixin):
     URL = "https://mydata.supercell.com/data/abc123DEF-_.html"
     FILENAME = "abc123DEF-_.html"
     STUB_FILENAME = "abc123DEF-_.expired"
+
+    def test_fetches_requested_id_with_rfc822_spec(self):
+        # process_email must fetch the exact id it is given, with the (RFC822)
+        # spec — a wrong spec would fetch headers only and break body parsing.
+        mail = FakeMail(build_email(self.URL))
+        fake_resp = mock.Mock(status_code=200, content=b"<html></html>")
+        with mock.patch.object(retrieve.requests, "get", return_value=fake_resp):
+            retrieve.process_email(mail, b"42")
+
+        self.assertEqual(mail.fetch_calls, [(b"42", "(RFC822)")])
 
     def test_downloads_when_file_absent(self):
         mail = FakeMail(build_email(self.URL))
