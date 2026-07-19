@@ -4,7 +4,7 @@ from http.cookiejar import CookieJar
 import browser_cookie3
 import requests
 
-from config import settings
+from config import BROWSER_CHOICES, settings
 from logger import get_logger
 
 logger = get_logger(__name__)
@@ -18,6 +18,25 @@ HTTP_TIMEOUT = 30
 
 USER_AGENT = settings.user_agent
 
+# Browser type -> cookie-loading callable. Keys must stay in sync with
+# config.BROWSER_CHOICES: config validates browser_type against that set, so a
+# choice allowed there but missing here would pass validation and then KeyError
+# at runtime. tests/test_request.py guards the two against drifting.
+FETCHERS: dict[str, Callable[..., CookieJar]] = {
+    "firefox": browser_cookie3.firefox,
+    "chrome": browser_cookie3.chrome,
+}
+
+# Guard: FETCHERS and config.BROWSER_CHOICES must cover exactly the same set. A
+# choice allowed by config but missing here would pass validation and then
+# KeyError at runtime (for only that browser). Fail loudly at import instead.
+if set(FETCHERS) != set(BROWSER_CHOICES):
+    raise RuntimeError(
+        "FETCHERS and config.BROWSER_CHOICES are out of sync — "
+        f"only in FETCHERS: {sorted(set(FETCHERS) - set(BROWSER_CHOICES))}, "
+        f"only in BROWSER_CHOICES: {sorted(set(BROWSER_CHOICES) - set(FETCHERS))}"
+    )
+
 
 # ---------------------------------------------------------
 # Fetch cookies from the specified browser
@@ -28,11 +47,7 @@ def browser_cookie_fetcher() -> Callable[..., CookieJar]:
     browser_type = settings.browser_type
     logger.info(f"Using browser type: {browser_type}")
 
-    fetchers: dict[str, Callable[..., CookieJar]] = {
-        "firefox": browser_cookie3.firefox,
-        "chrome": browser_cookie3.chrome,
-    }
-    return fetchers[browser_type]
+    return FETCHERS[browser_type]
 
 
 # ---------------------------------------------------------

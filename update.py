@@ -165,7 +165,7 @@ def ensure_header_row(sheet, required_fields):
 
     if new_header != existing_header:
         added = [f for f in new_header if f not in existing_header]
-        sheet.update("1:1", [new_header])
+        sheet.update([new_header], "1:1")
         logger.info(f"Appended new columns to header row: {added}")
 
     return new_header

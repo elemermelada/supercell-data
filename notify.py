@@ -9,16 +9,6 @@ from logger import get_logger
 
 logger = get_logger(__name__)
 
-# ---------------------------------------------------------
-# Environment variables (validated centrally in config.py)
-# ---------------------------------------------------------
-SMTP_SERVER = settings.smtp_server
-SMTP_PORT = settings.smtp_port
-EMAIL_USER = settings.email_user
-EMAIL_PASS = settings.email_pass
-# Where alerts are delivered; falls back to the sending account.
-ALERT_EMAIL = settings.alert_email
-
 
 # ---------------------------------------------------------
 # Build the plain-text body listing each failed step
@@ -67,7 +57,16 @@ def send_failure_email(
     if not failures:
         return
 
-    if not (EMAIL_USER and EMAIL_PASS and ALERT_EMAIL):
+    # Read config at call time (not import time) so the credentials reflect the
+    # current settings — validated centrally in config.py. ALERT_EMAIL falls
+    # back to the sending account.
+    email_user = settings.email_user
+    email_pass = settings.email_pass
+    alert_email = settings.alert_email
+    smtp_server = settings.smtp_server
+    smtp_port = settings.smtp_port
+
+    if not (email_user and email_pass and alert_email):
         logger.error(
             "Cannot send alert email: missing EMAIL_USER, EMAIL_PASS or ALERT_EMAIL"
         )
@@ -76,17 +75,17 @@ def send_failure_email(
     failed_steps = ", ".join(name for name, _, _ in failures)
     msg = EmailMessage()
     msg["Subject"] = f"[supercell-data] Pipeline failure: {failed_steps}"
-    msg["From"] = EMAIL_USER
-    msg["To"] = ALERT_EMAIL
+    msg["From"] = email_user
+    msg["To"] = alert_email
     msg.set_content(_build_body(failures))
 
     _attach_log(msg, log_file)
 
     try:
-        logger.info(f"Sending failure alert to {ALERT_EMAIL} via {SMTP_SERVER}...")
+        logger.info(f"Sending failure alert to {alert_email} via {smtp_server}...")
         context = ssl.create_default_context()
-        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, context=context) as server:
-            server.login(EMAIL_USER, EMAIL_PASS)
+        with smtplib.SMTP_SSL(smtp_server, smtp_port, context=context) as server:
+            server.login(email_user, email_pass)
             server.send_message(msg)
         logger.info("Alert email sent")
     except Exception as e:

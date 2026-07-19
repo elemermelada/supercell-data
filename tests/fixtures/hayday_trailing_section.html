@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Summary of Your Data - Supercell</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  </head>
+  <body>
+    <div class="content">
+
+        <h1 class="header">Summary of Your Data</h1>
+
+<h2>Hay Day</h2>
+
+<p>Your name is <b>TestFarmer</b> and age is <b>30</b>.</p>
+<p>You have <b>42</b> gems.</p>
+<p>Your experience level is <b>25</b>.</p>
+
+
+<h2>Boom Beach</h2>
+
+<!--
+    A section after Hay Day. process.extract_hay_day_data walks <p> tags from
+    the Hay Day <h2> and breaks at the next <h2> (process.py:40), so none of
+    these values may bleed into the Hay Day result.
+-->
+<p>Your name is <b>LeakedName</b> and age is <b>1</b>.</p>
+<p>You have <b>99999</b> gems.</p>
+<p>Your experience level is <b>1</b>.</p>
+
+    </div>
+  </body>
+</html>
+
+<!-- EMAIL_DATE: 2024-05-15T09:30:00+00:00 -->
