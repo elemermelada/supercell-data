@@ -4,23 +4,20 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 
-from dotenv import load_dotenv
-
+from config import settings
 from logger import get_logger
-
-load_dotenv()
 
 logger = get_logger(__name__)
 
 # ---------------------------------------------------------
-# Environment variables
+# Environment variables (validated centrally in config.py)
 # ---------------------------------------------------------
-SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
-EMAIL_USER = os.getenv("EMAIL_USER")
-EMAIL_PASS = os.getenv("EMAIL_PASS")
+SMTP_SERVER = settings.smtp_server
+SMTP_PORT = settings.smtp_port
+EMAIL_USER = settings.email_user
+EMAIL_PASS = settings.email_pass
 # Where alerts are delivered; falls back to the sending account.
-ALERT_EMAIL = os.getenv("ALERT_EMAIL") or EMAIL_USER
+ALERT_EMAIL = settings.alert_email
 
 
 # ---------------------------------------------------------

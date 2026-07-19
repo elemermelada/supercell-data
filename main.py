@@ -2,9 +2,6 @@ import os
 import traceback
 from collections.abc import Callable
 from datetime import datetime
-from time import sleep
-
-from dotenv import load_dotenv
 
 from logger import get_logger, setup_logging
 from notify import send_failure_email
@@ -12,8 +9,6 @@ from process import process
 from request import request
 from retrieve import retrieve
 from update import update
-
-load_dotenv()
 
 logger = get_logger("main")
 
@@ -44,9 +39,6 @@ def main() -> None:
     setup_logging(log_file)
 
     run_step(request)
-    # The export email arrives almost instantly after the request, so a short
-    # pause lets it land in the inbox before `retrieve` searches for it.
-    sleep(5)
     run_step(retrieve)
     run_step(process)
     run_step(update)
