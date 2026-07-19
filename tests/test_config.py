@@ -21,15 +21,15 @@ class ParseIntEnvTests(unittest.TestCase):
             self.assertEqual(_parse_int_env("N", 7, minimum=0), 7)
 
     def test_uses_default_when_blank(self):
-        with mock.patch.dict(os.environ, {"N": "   "}):
+        with mock.patch.dict(os.environ, {"N": "   "}, clear=True):
             self.assertEqual(_parse_int_env("N", 7, minimum=0), 7)
 
     def test_parses_valid_value(self):
-        with mock.patch.dict(os.environ, {"N": " 42 "}):
+        with mock.patch.dict(os.environ, {"N": " 42 "}, clear=True):
             self.assertEqual(_parse_int_env("N", 7, minimum=0), 42)
 
     def test_clamps_to_minimum(self):
-        with mock.patch.dict(os.environ, {"N": "-3"}):
+        with mock.patch.dict(os.environ, {"N": "-3"}, clear=True):
             self.assertEqual(_parse_int_env("N", 7, minimum=1), 1)
 
     def test_default_below_minimum_is_clamped(self):
@@ -37,7 +37,7 @@ class ParseIntEnvTests(unittest.TestCase):
             self.assertEqual(_parse_int_env("N", 0, minimum=1), 1)
 
     def test_malformed_raises_config_error(self):
-        with mock.patch.dict(os.environ, {"N": "not-an-int"}):
+        with mock.patch.dict(os.environ, {"N": "not-an-int"}, clear=True):
             with self.assertRaises(ConfigError) as ctx:
                 _parse_int_env("N", 7, minimum=0)
         self.assertIn("N", str(ctx.exception))
@@ -52,13 +52,13 @@ class ParseChoiceEnvTests(unittest.TestCase):
             )
 
     def test_lowercases_value(self):
-        with mock.patch.dict(os.environ, {"B": "CHROME"}):
+        with mock.patch.dict(os.environ, {"B": "CHROME"}, clear=True):
             self.assertEqual(
                 _parse_choice_env("B", "firefox", BROWSER_CHOICES), "chrome"
             )
 
     def test_invalid_choice_raises_config_error(self):
-        with mock.patch.dict(os.environ, {"B": "safari"}):
+        with mock.patch.dict(os.environ, {"B": "safari"}, clear=True):
             with self.assertRaises(ConfigError) as ctx:
                 _parse_choice_env("B", "firefox", BROWSER_CHOICES)
         self.assertIn("safari", str(ctx.exception))
