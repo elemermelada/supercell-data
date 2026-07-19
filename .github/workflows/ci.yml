@@ -34,3 +34,9 @@ jobs:
 
       - name: Type check (mypy)
         run: mypy .
+
+      - name: Install pytest
+        run: pip install pytest
+
+      - name: Run tests (pytest)
+        run: pytest

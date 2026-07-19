@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Summary of Your Data - Supercell</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
+    <link rel="apple-touch-icon" sizes="180x180" href="https://cdn.supercell.com/brand/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" href="https://cdn.supercell.com/brand/favicon/favicon-32x32.png" sizes="32x32">
+    <link rel="icon" type="image/png" href="https://cdn.supercell.com/brand/favicon/favicon-16x16.png" sizes="16x16">
+    <link rel="manifest" href="https://cdn.supercell.com/brand/favicon/manifest.json">
+    <link rel="mask-icon" href="https://cdn.supercell.com/brand/favicon/safari-pinned-tab.svg" color="#5bbad5">
+    <style>
+        @font-face {
+            font-family: 'SupercellHeadline-Heavy';
+            src: url('https://cdn.supercell.com/fonts/supercell/supercellheadline/supercellheadline-heavy.eot');
+            src: url('https://cdn.supercell.com/fonts/supercell/supercellheadline/supercellheadline-heavy.eot?#iefix') format('embedded-opentype'),url('https://cdn.supercell.com/fonts/supercell/supercellheadline/supercellheadline-heavy.woff2') format('woff2'),url('https://cdn.supercell.com/fonts/supercell/supercellheadline/supercellheadline-heavy.woff') format('woff');
+        }
+        @font-face {
+            font-family: 'SupercellText-Regular';
+            src: url('https://cdn.supercell.com/fonts/supercell/supercelltext/full/supercelltext_w_rg.eot');
+            src: url('https://cdn.supercell.com/fonts/supercell/supercelltext/full/supercelltext_w_rg.eot?#iefix') format('embedded-opentype'),url('https://cdn.supercell.com/fonts/supercell/supercelltext/full/supercelltext_w_rg.woff2') format('woff2'),url('https://cdn.supercell.com/fonts/supercell/supercelltext/full/supercelltext_w_rg.woff') format('woff'),url('https://cdn.supercell.com/fonts/supercell/supercelltext/full/supercelltext_w_rg.ttf') format('truetype');
+        }
+        @font-face {
+            font-family: 'SupercellText-Medium';
+            src: url('https://cdn.supercell.com/fonts/supercell/supercelltext/full/supercelltext_w_md.eot');
+            src: url('https://cdn.supercell.com/fonts/supercell/supercelltext/full/supercelltext_w_md.eot?#iefix') format('embedded-opentype'),url('https://cdn.supercell.com/fonts/supercell/supercelltext/full/supercelltext_w_md.woff2') format('woff2'),url('https://cdn.supercell.com/fonts/supercell/supercelltext/full/supercelltext_w_md.woff') format('woff'),url('https://cdn.supercell.com/fonts/supercell/supercelltext/full/supercelltext_w_md.ttf') format('truetype');
+        }
+        body {
+            margin: 0;
+        }
+        .content {
+            margin: 3em;
+            font-family: 'SupercellText-Regular',sans-serif;
+            font-size: 16px;
+            padding-bottom: 3em;
+        }
+        .content b {
+            font-family: 'SupercellText-Medium',sans-serif;
+        }
+        .content .header {
+            font-family: 'SupercellHeadline-Heavy',sans-serif;
+            font-size: 45px;
+            font-weight: normal;
+            line-height: 1.25;
+            letter-spacing: -0.025em;
+            color: #000000;
+        }
+        .content h2 {
+            font-family: 'SupercellHeadline-Heavy',sans-serif;
+        }
+        .content h3 {
+            font-family: 'SupercellText-Medium',sans-serif;
+        }
+        .content p {
+            line-height: 1.5;
+            margin: 6px 0 6px 0;
+        }
+        table {
+            border-collapse:collapse;
+            width: 100%;
+            -webkit-text-size-adjust:none;
+        }
+        table thead th {
+            font-family: 'SupercellText-Medium',sans-serif;
+            border-bottom: 1px solid #000;
+            text-align: left;
+            padding: 6px 16px 10px 0;
+        }
+        table tbody td {
+            padding: 6px 16px 0 0;
+        }
+        table tbody tr.border-bottom {
+            border-bottom: 1px solid #000;
+        }
+        table tbody tr.border-bottom td {
+            padding: 6px 16px 10px 0;
+        }
+        footer.main {
+            bottom: 0;
+            width: 100%;
+            overflow: hidden;
+            background: #000;
+            margin-top: -1px !important;
+        }
+        footer.main .footer-end.solo {
+            margin-top: 2em;
+        }
+        footer.main .footer-end {
+            width: 100%;
+            margin: 0 auto 2em auto;
+            overflow: hidden;
+            position: relative;
+        }
+        footer.main .footer-end .mail {
+            color: #666;
+            font-family: 'SupercellText-Regular',sans-serif;
+            font-size: 14px;
+            margin: 0 3em 0 3em;
+        }
+        footer.main .footer-end .mail address {
+            font-style: normal;
+            margin: 0;
+            padding: 0;
+        }
+        address {
+            font-style: normal;
+        }
+        footer.main .footer-end .mail span {
+            display: block;
+        }
+        footer.main .footer-end .logo {
+            width: 25%;
+            position: absolute;
+            top: 0;
+            right: 3em;
+            height: 100%;
+        }
+        footer.main .footer-end .logo a {
+            display: block;
+            position: absolute;
+            right: 0;
+            width: 54px;
+            height: 46px;
+            text-indent: -9999px;
+            outline: none;
+            background: url('/logo_supercell.png') no-repeat;
+            background-size: 54px 44px;
+        }
+
+        a, a:link, a:visited, a:active {
+            text-decoration: none;
+        }
+        a {
+            text-decoration: none;
+            color: #2d85f3;
+        }
+        a {
+            outline: none;
+        }
+
+        @media only screen and (max-width: 768px) {
+            .content {
+                margin: 1em;
+            }
+            footer.main .footer-end .mail {
+                margin: 0 1em 0 1em;
+            }
+            footer.main .footer-end .logo {
+                right: 1em;
+            }
+        }
+        @media print {
+            .content {
+                margin: 1em;
+            }
+            footer.main {
+                border-top: #000 solid 1px;
+                background: #fff;
+                margin: 0 1em 0 1em;
+            }
+            footer.main .footer-end .mail {
+                margin: 0
+            }
+            footer.main .footer-end .logo {
+                right: 1em;
+            }
+            footer.main .footer-end .logo a {
+                content:url('/supercell_logo_black_on_white.jpg');
+            }
+        }
+    </style>
+  </head>
+  <body>
+    <div class="content">
+
+        <h1 class="header">Summary of Your Data</h1>
+
+        <p>This is a summary of the personal data we hold about you in relation to our games. For more information on how we process your personal data, including the rights you have over your personal data, please refer to our Privacy Policy available at <a href="https://supercell.com/en/privacy-policy/" target="_blank">https://supercell.com/en/privacy-policy/</a>.</p>
+        <p>If you have any further questions, please contact us.</p>
+        <p>This report has been created on May 15, 2024.<br/>
+
+
+        <h2>Supercell ID</h2>
+        <p>Your name is <b>TestPlayer</b> and email address is <b>testplayer@example.com</b>.</p>
+
+        <p>Your friends are <b>NeighborBob</b>.</p>
+
+
+        <p>Your connected games are <b>Clash of Clans</b> and <b>Hay Day</b>.</p>
+
+        <p>Your detected country is XX.</p>
+
+        <br/>
+
+
+        <p>Your Supercell ID Rewards status is not active.</p>
+
+        <p>Your total amount of rewards points is 0.</p>
+        <br/>
+
+
+
+<h2>Clash of Clans</h2>
+
+
+<p>Your name is <b>TestPlayer</b> and age is <b>99</b>.</p>
+<p>Your village was created on <b>2019-01-01 00:00:00</b> in <b>Neverland</b> (203.0.113.1).</p>
+<p>Your account is <b>not banned</b> and <b>not locked</b>.</p>
+
+<p>You last logged in on <b>2024-05-01 12:00:00</b> from <b>Neverland</b> (203.0.113.9).</p>
+
+<p>You have played <b>1234</b> sessions in total.</p>
+
+<p>You are a member of a clan called <b>TestClan</b>. Your rank is "member".</p>
+
+
+
+
+<h3>Resources and progress</h3>
+<p>You have <b>7</b> gems.</p>
+<p>You have <b>0</b> trophies and <b>0</b> experience points. Your experience level is <b>1</b>.</p>
+<p>Your townhall is level <b>1</b> and townhall weapon level <b>1</b>.</p>
+<p>Main base resources: <b>0</b> gold, <b>0</b> elixir, and <b>0</b> dark elixir.</p>
+
+
+
+
+<h3>Connected social accounts</h3>
+
+
+<p>GameCenter: U:1111fakeclashgamecenter1111</p>
+
+<p>Google Play: g11111111111111111111</p>
+
+
+
+
+<h3>Sessions</h3>
+
+<table>
+    <thead>
+        <tr>
+            <th>Session start</th>
+            <th>Duration</th>
+            <th>IP</th>
+            <th>Country</th>
+        </tr>
+    </thead>
+    <tbody>
+
+        <tr class="border-bottom">
+            <td>2024-05-01 12:00:00</td>
+            <td>1 min 51 s</td>
+            <td>203.0.113.9</td>
+            <td>Neverland</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-04-28 09:44:54</td>
+            <td>3 min 18 s</td>
+            <td>203.0.113.9</td>
+            <td>Neverland</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-04-28 09:44:12</td>
+            <td>8 s</td>
+            <td>203.0.113.9</td>
+            <td>Neverland</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-02-28 02:41:25</td>
+            <td>3 min 7 s</td>
+            <td>203.0.113.10</td>
+            <td>Neverland</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-02-26 21:45:36</td>
+            <td>2 min 55 s</td>
+            <td>203.0.113.10</td>
+            <td>Neverland</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-02-19 20:22:33</td>
+            <td>4 min 8 s</td>
+            <td>203.0.113.9</td>
+            <td>Neverland</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-02-12 21:03:13</td>
+            <td>4 min 40 s</td>
+            <td>203.0.113.9</td>
+            <td>Neverland</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-02-05 22:17:38</td>
+            <td>6 min 9 s</td>
+            <td>203.0.113.11</td>
+            <td>Neverland</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-02-01 10:44:41</td>
+            <td>3 min 39 s</td>
+            <td>203.0.113.9</td>
+            <td>Neverland</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-01-31 10:12:10</td>
+            <td>4 min 53 s</td>
+            <td>203.0.113.12</td>
+            <td>Neverland</td>
+        </tr>
+
+    </tbody>
+</table>
+
+
+
+
+<h3>Handsets and devices</h3>
+
+<table>
+    <thead>
+        <tr>
+            <th>Last seen (UTC time)</th>
+            <th>Name</th>
+        </tr>
+    </thead>
+    <tbody>
+
+        <tr class="border-bottom">
+            <td>2024-05-01 12:00:00</td>
+            <td>Example Phone 1</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-02-19 20:22:33</td>
+            <td>Example Phone 2</td>
+        </tr>
+
+    </tbody>
+</table>
+
+
+
+
+<br/>
+
+
+
+<h2>Hay Day</h2>
+
+
+<p>Your name is <b>TestFarmer</b> and age is <b>30</b>.</p>
+<p>Your farm was created on <b>2023-01-15 10:00:00</b> in <b>Germany</b> (198.51.100.23).</p>
+<p>Your account is <b>not banned</b> and <b>not locked</b>.</p>
+
+<p>You have played <b>500</b> sessions in total.</p>
+
+<p>You are a member of a neighborhood called <b>TestVille</b>. Your rank is "leader".</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h3>Resources and progress</h3>
+<p>You have <b>42</b> gems.</p>
+<p>You have reputation level <b>3</b> and <b>1500</b> experience points. Your experience level is <b>25</b>.</p>
+<p>Resources: <b>99999</b> coins and vouchers: <b>10</b> Blue, <b>20</b> Green, <b>5</b> Purple and <b>1</b> Gold.</p>
+<p>Your Valley resources: <b>7</b> fuel, <b>3</b> chickens, <b>2</b> sanctuary animals, <b>4</b> sun points and vouchers: <b>6</b> Blue, <b>8</b> Green, <b>9</b> Red.</p>
+
+
+
+
+<h3>Connected social accounts</h3>
+
+
+<p>GameCenter: U:0000fakegamecenterid0000</p>
+
+
+
+
+
+<h3>Sessions</h3>
+
+<table>
+    <thead>
+        <tr>
+            <th>Session start</th>
+            <th>Duration</th>
+            <th>IP</th>
+            <th>Country</th>
+        </tr>
+    </thead>
+    <tbody>
+
+        <tr class="border-bottom">
+            <td>2024-05-08 08:09:17</td>
+            <td>6 min 48 s</td>
+            <td>198.51.100.23</td>
+            <td>Germany</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-05-08 00:03:10</td>
+            <td>4 min 51 s</td>
+            <td>198.51.100.23</td>
+            <td>Germany</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-05-07 20:48:48</td>
+            <td>2 min 38 s</td>
+            <td>198.51.100.23</td>
+            <td>Germany</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-05-07 20:47:11</td>
+            <td>1 min 20 s</td>
+            <td>198.51.100.23</td>
+            <td>Germany</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-05-07 20:46:50</td>
+            <td>16 s</td>
+            <td>198.51.100.23</td>
+            <td>Germany</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-05-06 21:30:36</td>
+            <td>3 min 41 s</td>
+            <td>198.51.100.24</td>
+            <td>Germany</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-05-06 21:25:39</td>
+            <td>4 min 15 s</td>
+            <td>198.51.100.24</td>
+            <td>Germany</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-05-06 21:06:44</td>
+            <td>17 min 18 s</td>
+            <td>198.51.100.24</td>
+            <td>Germany</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-05-06 20:57:50</td>
+            <td>8 min 46 s</td>
+            <td>198.51.100.24</td>
+            <td>Germany</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-05-06 09:03:13</td>
+            <td>6 min 27 s</td>
+            <td>198.51.100.24</td>
+            <td>Germany</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-05-06 07:17:36</td>
+            <td>5 min 13 s</td>
+            <td>198.51.100.24</td>
+            <td>Germany</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-05-05 23:02:11</td>
+            <td>17 min 20 s</td>
+            <td>198.51.100.24</td>
+            <td>Germany</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-05-05 22:43:28</td>
+            <td>6 s</td>
+            <td>198.51.100.24</td>
+            <td>Germany</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-05-05 22:24:57</td>
+            <td>9 s</td>
+            <td>198.51.100.24</td>
+            <td>Germany</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-05-05 22:06:48</td>
+            <td>2 min 19 s</td>
+            <td>203.0.113.45</td>
+            <td>Neverland</td>
+        </tr>
+
+    </tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h3>Handsets and devices</h3>
+
+<table>
+    <thead>
+        <tr>
+            <th>Last seen (UTC time)</th>
+            <th>Name</th>
+        </tr>
+    </thead>
+    <tbody>
+
+        <tr class="border-bottom">
+            <td>2024-05-08 08:09:17</td>
+            <td>Example Phone 1</td>
+        </tr>
+
+        <tr class="border-bottom">
+            <td>2024-02-26 15:33:20</td>
+            <td>Example Phone 2</td>
+        </tr>
+
+    </tbody>
+</table>
+
+
+
+
+<br/>
+
+
+    </div>
+
+    <footer class="main">
+      <div class="footer-end solo">
+        <div class="mail">
+          <address>
+            <span>Supercell Oy</span>
+            <span>Jätkäsaarenlaituri 1</span>
+            <span>00180 Helsinki</span>
+            <span>Finland</span>
+          </address>
+        </div>
+        <div class="logo">
+          <a href="https://supercell.com/en/" target="_blank" title="Front page">Supercell</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
+
+<!-- EMAIL_DATE: 2024-05-15T09:30:00+00:00 -->
