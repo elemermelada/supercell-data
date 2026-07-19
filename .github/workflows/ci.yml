@@ -34,3 +34,6 @@ jobs:
 
       - name: Type check (mypy)
         run: mypy .
+
+      - name: Run tests (unittest)
+        run: python -m unittest discover -s tests
