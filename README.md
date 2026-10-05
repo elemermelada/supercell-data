@@ -18,7 +18,7 @@ Supercell only accepts one GDPR request per day, so running the pipeline once a 
 ## Prerequisites
 
 - Python 3.11
-- A browser (Firefox by default, or Chrome) logged in to `support.supercell.com`. Cookies are read automatically by `request.py` — no manual token copying required.
+- A browser (Firefox by default, or Chrome) logged in to Supercell ID on `support.supercell.com`. Cookies are read automatically by `request.py` — no manual token copying required. The support site's own session only lasts an hour, so `request.py` renews it on every run from the long-lived Supercell ID login (~1 year); you only need to log in again in the browser when that expires, and the failure email will say so.
 - A Google service account JSON file (`service_account.json`) in the project root, with edit access to your target sheet
 
 ## Install
