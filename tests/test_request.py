@@ -1,5 +1,5 @@
-"""Unit tests for request.py: the CSRF fetch, the GDPR submit and the
-browser-cookie fetcher selection.
+"""Unit tests for request.py: the Supercell ID SSO login, the CSRF fetch, the
+GDPR submit and the browser-cookie fetcher selection.
 
 No real HTTP or browsers — ``requests.Session`` and ``browser_cookie3`` are
 mocked. Run with: pytest tests/test_request.py
@@ -67,12 +67,92 @@ class SubmitRequestTests(unittest.TestCase):
         self.assertEqual(headers["User-Agent"], request.USER_AGENT)
 
 
+class SsoLoginTests(unittest.TestCase):
+    def _session(self, authorize_status=200, authorize_body=None):
+        if authorize_body is None:
+            authorize_body = {
+                "ok": True,
+                "data": {
+                    "scid": "scid-1",
+                    "authorizationCode": "code-xyz",
+                    "sessionExpiration": "2027-10-05T20:14:10Z",
+                    "refreshNeeded": False,
+                },
+            }
+        authorize = mock.Mock(status_code=authorize_status, text="")
+        authorize.ok = authorize_status < 400
+        authorize.json.return_value = authorize_body
+        login = mock.Mock()
+        session = mock.Mock()
+        session.post.side_effect = [authorize, login]
+        return session, login
+
+    def test_exchanges_authorization_code_for_support_session(self):
+        session, login = self._session()
+
+        request.sso_login(session)
+
+        authorize_call, login_call = session.post.call_args_list
+        (url,), kwargs = authorize_call
+        self.assertEqual(url, request.SSO_AUTHORIZE_URL)
+        self.assertEqual(
+            kwargs["data"],
+            {"client_id": request.SSO_CLIENT_ID, "scope": request.SSO_SCOPE},
+        )
+        self.assertEqual(kwargs["headers"]["Origin"], request.SUPPORT_ORIGIN)
+        self.assertEqual(kwargs["timeout"], request.HTTP_TIMEOUT)
+
+        (url,), kwargs = login_call
+        self.assertEqual(url, request.SSO_LOGIN_URL)
+        self.assertEqual(kwargs["json"], {"authorizationCode": "code-xyz"})
+        self.assertEqual(kwargs["timeout"], request.HTTP_TIMEOUT)
+        login.raise_for_status.assert_called_once()
+
+    def test_unauthorized_asks_for_browser_login(self):
+        session, _ = self._session(
+            authorize_status=401, authorize_body={"ok": False, "error": "unauthorized"}
+        )
+        with self.assertRaises(RuntimeError) as ctx:
+            request.sso_login(session)
+        self.assertIn("log in to Supercell ID", str(ctx.exception))
+        session.post.assert_called_once()  # never reaches the support login
+
+    def test_refresh_needed_asks_for_browser_login(self):
+        session, _ = self._session(
+            authorize_body={
+                "ok": True,
+                "data": {"authorizationCode": "code-xyz", "refreshNeeded": True},
+            }
+        )
+        with self.assertRaises(RuntimeError) as ctx:
+            request.sso_login(session)
+        self.assertIn("log in to Supercell ID", str(ctx.exception))
+        session.post.assert_called_once()
+
+    def test_unexpected_authorize_error_raises_with_status(self):
+        session, _ = self._session(
+            authorize_status=403,
+            authorize_body={"ok": False, "error": "country_blocked"},
+        )
+        with self.assertRaises(RuntimeError) as ctx:
+            request.sso_login(session)
+        self.assertIn("403", str(ctx.exception))
+        self.assertIn("country_blocked", str(ctx.exception))
+
+    def test_missing_code_raises(self):
+        session, _ = self._session(authorize_body={"ok": True, "data": {}})
+        with self.assertRaises(RuntimeError) as ctx:
+            request.sso_login(session)
+        self.assertIn("authorization code", str(ctx.exception))
+
+
 class RequestTests(unittest.TestCase):
     def test_non_200_submit_raises_with_status(self):
         resp = mock.Mock(status_code=503, text="service unavailable")
         with (
             mock.patch.object(request.requests, "Session", return_value=mock.Mock()),
             mock.patch.object(request, "load_browser_cookies"),
+            mock.patch.object(request, "sso_login"),
             mock.patch.object(request, "fetch_csrf", return_value="tok"),
             mock.patch.object(request, "submit_request", return_value=resp),
         ):
@@ -85,13 +165,33 @@ class RequestTests(unittest.TestCase):
         with (
             mock.patch.object(request.requests, "Session", return_value=mock.Mock()),
             mock.patch.object(request, "load_browser_cookies") as load,
+            mock.patch.object(request, "sso_login") as sso,
             mock.patch.object(request, "fetch_csrf", return_value="tok") as csrf,
             mock.patch.object(request, "submit_request", return_value=resp) as submit,
         ):
             request.request()  # must not raise
         load.assert_called_once()
+        sso.assert_called_once()
         csrf.assert_called_once()
         submit.assert_called_once()
+
+    def test_sso_login_runs_before_csrf_fetch(self):
+        # The support API 401s without the token sso_login mints, so the
+        # order matters.
+        calls = mock.Mock()
+        resp = mock.Mock(status_code=200, text="ok")
+        calls.fetch_csrf.return_value = "tok"
+        with (
+            mock.patch.object(request.requests, "Session", return_value=mock.Mock()),
+            mock.patch.object(request, "load_browser_cookies", calls.load),
+            mock.patch.object(request, "sso_login", calls.sso_login),
+            mock.patch.object(request, "fetch_csrf", calls.fetch_csrf),
+            mock.patch.object(request, "submit_request", return_value=resp),
+        ):
+            request.request()
+        self.assertEqual(
+            [c[0] for c in calls.mock_calls], ["load", "sso_login", "fetch_csrf"]
+        )
 
 
 class BrowserCookieFetcherTests(unittest.TestCase):

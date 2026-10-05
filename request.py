@@ -12,6 +12,23 @@ logger = get_logger(__name__)
 BEGIN_URL = "https://support.supercell.com/api/gdpr/begin"
 SUBMIT_URL = "https://support.supercell.com/api/gdpr/submit"
 
+# Supercell ID single sign-on. The support API only accepts a short-lived
+# (1 hour) `account-user-info-token` cookie, which the support site's JS mints
+# on every page load by exchanging the long-lived Supercell ID cookies
+# (`scsso_*`, ~1 year) for an authorization code and posting it to the support
+# backend. The browser cookie store therefore almost never holds a valid token
+# by the time the scheduled run starts, so request() performs the same exchange
+# itself. Client id and scope are the support site's own, taken from its page
+# config (`ssoClientId`) and bundle.
+SSO_AUTHORIZE_URL = "https://accounts.supercell.com/oauth/sso/authorize"
+SSO_LOGIN_URL = "https://support.supercell.com/api/oauth/sso/login"
+SSO_CLIENT_ID = "65109BC2-72CD-423B-B151-5F47E812C3BE"
+SSO_SCOPE = (
+    "social.profile identity.email "
+    "identity.connections_raw identity.connections_game_data"
+)
+SUPPORT_ORIGIN = "https://support.supercell.com"
+
 # Seconds to wait on any single HTTP call before giving up, so a hung
 # connection can't stall the whole scheduled run indefinitely.
 HTTP_TIMEOUT = 30
@@ -70,6 +87,60 @@ def load_browser_cookies(session):
 
 
 # ---------------------------------------------------------
+# Log in to the support site via Supercell ID SSO
+# ---------------------------------------------------------
+def sso_login(session: requests.Session):
+    """Exchange the Supercell ID cookies for a fresh support-site session.
+
+    Raises RuntimeError with an actionable message when the Supercell ID login
+    itself has expired, since only a manual login in the browser can fix that.
+    """
+    relogin_hint = (
+        f"log in to Supercell ID at {SUPPORT_ORIGIN} in {settings.browser_type}"
+    )
+    logger.info("Authorizing with Supercell ID...")
+
+    r = session.post(
+        SSO_AUTHORIZE_URL,
+        data={"client_id": SSO_CLIENT_ID, "scope": SSO_SCOPE},
+        headers={
+            "Origin": SUPPORT_ORIGIN,
+            "Referer": f"{SUPPORT_ORIGIN}/",
+            "User-Agent": USER_AGENT,
+        },
+        timeout=HTTP_TIMEOUT,
+    )
+    try:
+        body = r.json()
+    except ValueError:
+        body = {}
+    if r.status_code == 401:
+        raise RuntimeError(f"Supercell ID session expired or missing; {relogin_hint}")
+    if not r.ok or not body.get("ok"):
+        raise RuntimeError(
+            f"Supercell ID authorize failed: HTTP {r.status_code} — "
+            f"{body.get('error') or r.text[:200]}"
+        )
+
+    data = body.get("data") or {}
+    if data.get("refreshNeeded"):
+        raise RuntimeError(f"Supercell ID session needs a refresh; {relogin_hint}")
+    code = data.get("authorizationCode")
+    if not code:
+        raise RuntimeError("Supercell ID authorize returned no authorization code")
+    logger.info(f"Supercell ID session expires: {data.get('sessionExpiration')}")
+
+    r = session.post(
+        SSO_LOGIN_URL,
+        json={"authorizationCode": code},
+        headers={"User-Agent": USER_AGENT},
+        timeout=HTTP_TIMEOUT,
+    )
+    r.raise_for_status()
+    logger.info("Logged in to support site")
+
+
+# ---------------------------------------------------------
 # Fetch CSRF cookie
 # ---------------------------------------------------------
 def fetch_csrf(session: requests.Session, game: str, action: str):
@@ -116,6 +187,7 @@ def request():
     session = requests.Session()
 
     load_browser_cookies(session)
+    sso_login(session)
 
     csrf_token = fetch_csrf(session, game="hay-day", action="request")
     response = submit_request(session, csrf_token, game="hay-day", action="request")
